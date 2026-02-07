@@ -225,7 +225,7 @@ export function PerfilPage({ title, dimensao, placeholder, options: customOption
   const [valor, setValor] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const tabelaOptions = dimensao === 'assessor' ? TABELA_OPTIONS_ASSESSOR : TABELA_OPTIONS_PROCURADOR
-  const [tabela, setTabela] = useState(tabelaOptions[0].value)
+  const [tabela, setTabela] = useState<string>(tabelaOptions[0].value)
   const [pagination, setPagination] = useState<PaginationParams>({
     page: 1,
     page_size: 25,

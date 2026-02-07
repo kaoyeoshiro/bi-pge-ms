@@ -39,7 +39,7 @@ Thumbs.db
 
 # === Dados sensíveis ===
 planilhas/
-data/
+/data/
 *.xlsx
 *.xls
 *.csv
