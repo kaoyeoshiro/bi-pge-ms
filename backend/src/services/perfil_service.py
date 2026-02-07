@@ -4,7 +4,7 @@ import calendar
 import logging
 from collections import defaultdict
 from dataclasses import asdict
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,8 @@ from src.domain.schemas import (
 )
 from src.repositories.base_repository import BaseRepository
 from src.services.cache import cached
-from src.services.normalization import normalize_procurador_expr
+from src.domain.constants import CATEGORIAS_NAO_PRODUTIVAS
+from src.services.normalization import normalize_chefia_expr, normalize_procurador_expr
 
 # Métricas de procurador (usadas em visão geral, chefia, perfil procurador)
 PROCURADOR_TABLES = ["processos_novos", "pecas_finalizadas", "pendencias"]
@@ -162,10 +163,107 @@ class PerfilService:
         tabela: str = "pecas_elaboradas",
         limit: int = 15,
     ) -> list[GroupCount]:
-        """Ranking por procurador: quais procuradores o assessor atendeu."""
+        """Ranking por procurador: quais procuradores o assessor atendeu.
+
+        Para assessor + pecas_elaboradas: vincula à pecas_finalizadas
+        por (numero_processo, categoria) e agrupa por usuario_finalizacao
+        (procurador que finalizou a peça = procurador da pendência).
+        Para demais combinações: agrupa pela coluna procurador da tabela.
+        """
+        if dimensao == "assessor" and tabela == "pecas_elaboradas":
+            return await self._get_por_procurador_finalizador(
+                valor, filters, limit
+            )
+
         f = self._build_filters(dimensao, valor, filters)
         repo = self.repos[tabela]
         return await repo.count_by_group(f, "procurador", limit)
+
+    async def _get_por_procurador_finalizador(
+        self,
+        assessor_name: str,
+        filters: GlobalFilters,
+        limit: int = 15,
+    ) -> list[GroupCount]:
+        """Ranking: quais procuradores finalizaram as peças elaboradas pelo assessor.
+
+        Vincula pecas_elaboradas → pecas_finalizadas por (numero_processo, categoria)
+        e agrupa por usuario_finalizacao (procurador da pendência).
+        """
+        finalizador_expr = normalize_procurador_expr(
+            PecaFinalizada.usuario_finalizacao
+        )
+
+        # Apenas nomes classificados como procurador
+        proc_names_sq = (
+            select(UserRole.name)
+            .where(UserRole.role == "procurador")
+            .scalar_subquery()
+        )
+
+        stmt = (
+            select(
+                finalizador_expr.label("grupo"),
+                func.count(func.distinct(PecaElaborada.id)).label("total"),
+            )
+            .select_from(PecaElaborada)
+            .join(
+                PecaFinalizada,
+                (PecaElaborada.numero_processo == PecaFinalizada.numero_processo)
+                & (PecaElaborada.categoria == PecaFinalizada.categoria),
+            )
+            .where(PecaElaborada.usuario_criacao == assessor_name)
+            .where(PecaFinalizada.usuario_finalizacao.isnot(None))
+            .where(PecaFinalizada.usuario_finalizacao != "")
+            .where(PecaFinalizada.usuario_finalizacao.in_(proc_names_sq))
+            .where(PecaFinalizada.categoria.notin_(CATEGORIAS_NAO_PRODUTIVAS))
+            .group_by(finalizador_expr)
+            .order_by(func.count(func.distinct(PecaElaborada.id)).desc())
+            .limit(limit)
+        )
+
+        # Filtros de data sobre pecas_elaboradas
+        if filters.anos:
+            if len(filters.anos) == 1:
+                stmt = stmt.where(
+                    func.extract("year", PecaElaborada.data) == filters.anos[0]
+                )
+            else:
+                stmt = stmt.where(
+                    func.extract("year", PecaElaborada.data).in_(filters.anos)
+                )
+
+        if filters.mes:
+            stmt = stmt.where(
+                func.extract("month", PecaElaborada.data) == filters.mes
+            )
+
+        if filters.data_inicio:
+            dt_inicio = datetime.combine(
+                filters.data_inicio, datetime.min.time()
+            )
+            stmt = stmt.where(PecaElaborada.data >= dt_inicio)
+
+        if filters.data_fim:
+            dt_fim = datetime.combine(filters.data_fim, datetime.max.time())
+            stmt = stmt.where(PecaElaborada.data <= dt_fim)
+
+        if filters.chefia:
+            chefia_expr = normalize_chefia_expr(PecaElaborada.chefia)
+            stmt = stmt.where(chefia_expr.in_(filters.chefia))
+
+        if filters.categoria:
+            stmt = stmt.where(PecaElaborada.categoria.in_(filters.categoria))
+
+        if filters.procurador:
+            proc_expr = normalize_procurador_expr(PecaElaborada.procurador)
+            stmt = stmt.where(proc_expr.in_(filters.procurador))
+
+        result = await self.session.execute(stmt)
+        return [
+            GroupCount(grupo=row.grupo, total=row.total)
+            for row in result.all()
+        ]
 
     async def get_lista(
         self,
