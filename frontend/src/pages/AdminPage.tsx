@@ -5,14 +5,18 @@ import {
   useAdminLotacoes,
   useAdminUsers,
   useChefiaOptions,
+  useCreateHiddenRule,
+  useDeleteHiddenRule,
+  useHiddenProducaoRules,
   usePopulateRoles,
   useTableStats,
   useUpdateCargaReduzida,
+  useUpdateHiddenRule,
   useUpdateLotacao,
   useUpdateUserRole,
   useUploadExcel,
 } from '../api/hooks/useAdmin'
-import type { ProcuradorLotacao, TableStat } from '../types'
+import type { HiddenProcuradorRule, ProcuradorLotacao, TableStat } from '../types'
 
 const TABELA_OPTIONS = [
   { value: 'processos_novos', label: 'Processos Novos' },
@@ -590,12 +594,424 @@ function LotacaoTab() {
   )
 }
 
+// --- Tab Visibilidade (Ocultação de Produção) ---
+
+/** Calcula último dia do mês. */
+function lastDayOfMonth(year: number, month: number): string {
+  const d = new Date(year, month, 0)
+  return d.toISOString().split('T')[0]
+}
+
+/** Datas-sentinela para períodos abertos. */
+const DATE_MIN = '2000-01-01'
+const DATE_MAX = '2099-12-31'
+
+type PeriodoTipo = 'ate_hoje' | 'permanente' | 'personalizado'
+
+function VisibilidadeTab() {
+  const [showAll, setShowAll] = useState(false)
+  const [escopo, setEscopo] = useState<'global' | 'chefia'>('global')
+  const [chefia, setChefia] = useState('')
+  const [procurador, setProcurador] = useState('')
+  const [procSearch, setProcSearch] = useState('')
+  const [periodoTipo, setPeriodoTipo] = useState<PeriodoTipo>('permanente')
+  const [mesInicio, setMesInicio] = useState('')
+  const [mesFim, setMesFim] = useState('')
+  const [reason, setReason] = useState('')
+
+  const { data: rules, isLoading } = useHiddenProducaoRules(!showAll)
+  const { data: chefiaOptions } = useChefiaOptions()
+  const { data: usersData } = useAdminUsers(procSearch || undefined, 'procurador')
+  const createRule = useCreateHiddenRule()
+  const updateRule = useUpdateHiddenRule()
+  const deleteRule = useDeleteHiddenRule()
+
+  const procuradorOptions = useMemo(
+    () => (usersData?.users ?? []).map((u) => u.name),
+    [usersData]
+  )
+
+  /** Resolve as datas de início e fim a partir do tipo de período selecionado. */
+  const resolveDates = (): { start_date: string; end_date: string } | null => {
+    const today = new Date().toISOString().split('T')[0]
+
+    if (periodoTipo === 'ate_hoje') {
+      return { start_date: DATE_MIN, end_date: today }
+    }
+    if (periodoTipo === 'permanente') {
+      return { start_date: DATE_MIN, end_date: DATE_MAX }
+    }
+    // personalizado
+    if (!mesInicio || !mesFim) return null
+    const [yI, mI] = mesInicio.split('-').map(Number)
+    const [yF, mF] = mesFim.split('-').map(Number)
+    const startDate = `${yI}-${String(mI).padStart(2, '0')}-01`
+    const endDate = lastDayOfMonth(yF, mF)
+    if (startDate > endDate) return null
+    return { start_date: startDate, end_date: endDate }
+  }
+
+  const canSubmit = useMemo(() => {
+    if (!procurador) return false
+    if (escopo === 'chefia' && !chefia) return false
+    return resolveDates() !== null
+  }, [procurador, escopo, chefia, periodoTipo, mesInicio, mesFim])
+
+  const handleCreate = () => {
+    const dates = resolveDates()
+    if (!procurador || !dates) return
+
+    createRule.mutate(
+      {
+        procurador_name: procurador,
+        chefia: escopo === 'chefia' ? chefia || null : null,
+        start_date: dates.start_date,
+        end_date: dates.end_date,
+        reason: reason || null,
+      },
+      {
+        onSuccess: () => {
+          setProcurador('')
+          setReason('')
+          createRule.reset()
+        },
+      }
+    )
+  }
+
+  const handleToggleActive = (rule: HiddenProcuradorRule) => {
+    updateRule.mutate({ id: rule.id, data: { is_active: !rule.is_active } })
+  }
+
+  const handleDelete = (id: number) => {
+    if (confirm('Remover permanentemente esta regra?')) {
+      deleteRule.mutate(id)
+    }
+  }
+
+  /** Formata o período para exibição na tabela. */
+  const formatPeriodo = (start: string, end: string) => {
+    const isMin = start <= DATE_MIN
+    const isMax = end >= DATE_MAX
+
+    if (isMin && isMax) return 'Permanente'
+    if (isMin) {
+      const d = new Date(end + 'T00:00:00')
+      return `Até ${d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}`
+    }
+    if (isMax) {
+      const d = new Date(start + 'T00:00:00')
+      return `A partir de ${d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}`
+    }
+
+    const dI = new Date(start + 'T00:00:00')
+    const dF = new Date(end + 'T00:00:00')
+    const fmtI = dI.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
+    const fmtF = dF.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
+    return fmtI === fmtF ? fmtI : `${fmtI} — ${fmtF}`
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Formulário de criação */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700">
+          Ocultar Produção de Procurador
+        </h3>
+
+        {/* Escopo */}
+        <div>
+          <label className="mb-2 block text-xs font-medium text-gray-600">
+            Escopo
+          </label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="escopo"
+                value="global"
+                checked={escopo === 'global'}
+                onChange={() => setEscopo('global')}
+                className="accent-primary"
+              />
+              Todas as chefias
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="escopo"
+                value="chefia"
+                checked={escopo === 'chefia'}
+                onChange={() => setEscopo('chefia')}
+                className="accent-primary"
+              />
+              Chefia específica
+            </label>
+          </div>
+          {escopo === 'chefia' && (
+            <select
+              value={chefia}
+              onChange={(e) => setChefia(e.target.value)}
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">Selecione a chefia...</option>
+              {(chefiaOptions ?? []).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Procurador */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
+            Procurador
+          </label>
+          <input
+            type="text"
+            value={procurador || procSearch}
+            onChange={(e) => {
+              setProcurador('')
+              setProcSearch(e.target.value)
+            }}
+            placeholder="Buscar procurador..."
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {procSearch && !procurador && procuradorOptions.length > 0 && (
+            <div className="mt-1 max-h-40 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+              {procuradorOptions.slice(0, 10).map((name) => (
+                <button
+                  key={name}
+                  onClick={() => {
+                    setProcurador(name)
+                    setProcSearch('')
+                  }}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+          {procurador && (
+            <div className="mt-1 flex items-center gap-2">
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                {procurador}
+              </span>
+              <button
+                onClick={() => setProcurador('')}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                limpar
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Período */}
+        <div>
+          <label className="mb-2 block text-xs font-medium text-gray-600">
+            Período de ocultação
+          </label>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="periodo"
+                value="permanente"
+                checked={periodoTipo === 'permanente'}
+                onChange={() => setPeriodoTipo('permanente')}
+                className="accent-primary"
+              />
+              Permanente (todo o período, inclusive futuro — reversível)
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="periodo"
+                value="ate_hoje"
+                checked={periodoTipo === 'ate_hoje'}
+                onChange={() => setPeriodoTipo('ate_hoje')}
+                className="accent-primary"
+              />
+              Todo o período até a data atual
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="periodo"
+                value="personalizado"
+                checked={periodoTipo === 'personalizado'}
+                onChange={() => setPeriodoTipo('personalizado')}
+                className="accent-primary"
+              />
+              Período específico
+            </label>
+          </div>
+
+          {periodoTipo === 'personalizado' && (
+            <div className="mt-3 flex items-center gap-3">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs text-gray-500">De</label>
+                <input
+                  type="month"
+                  value={mesInicio}
+                  onChange={(e) => setMesInicio(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <span className="mt-5 text-gray-400">—</span>
+              <div className="flex-1">
+                <label className="mb-1 block text-xs text-gray-500">Até</label>
+                <input
+                  type="month"
+                  value={mesFim}
+                  onChange={(e) => setMesFim(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Motivo */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
+            Motivo (opcional)
+          </label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Ex: Procurador afastado, dados inconsistentes..."
+            rows={2}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        {/* Botão */}
+        <button
+          onClick={handleCreate}
+          disabled={!canSubmit || createRule.isPending}
+          className="rounded-lg bg-amber-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+        >
+          {createRule.isPending ? 'Aplicando...' : 'Aplicar Ocultação'}
+        </button>
+
+        {createRule.isSuccess && (
+          <div className="rounded-lg bg-green-50 p-3 text-sm text-green-800">
+            Regra de ocultação criada com sucesso.
+          </div>
+        )}
+        {createRule.isError && (
+          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+            Erro: {(createRule.error as Error).message}
+          </div>
+        )}
+      </div>
+
+      {/* Tabela de regras existentes */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">
+            Regras de Ocultação
+          </h3>
+          <label className="flex items-center gap-2 text-xs text-gray-500">
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-gray-300 accent-primary"
+            />
+            Mostrar inativas
+          </label>
+        </div>
+
+        <div className="max-h-[50vh] overflow-auto rounded-lg border border-gray-200">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-4 py-3">Procurador</th>
+                <th className="px-4 py-3">Chefia</th>
+                <th className="px-4 py-3">Período</th>
+                <th className="px-4 py-3 w-20">Status</th>
+                <th className="px-4 py-3 w-32">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                    Carregando...
+                  </td>
+                </tr>
+              ) : !rules?.length ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                    Nenhuma regra de ocultação{showAll ? '' : ' ativa'}.
+                  </td>
+                </tr>
+              ) : (
+                rules.map((rule) => (
+                  <tr key={rule.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 font-medium text-gray-900">
+                      {rule.procurador_name}
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">
+                      {rule.chefia ?? (
+                        <span className="italic text-gray-400">Todas</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">
+                      {formatPeriodo(rule.start_date, rule.end_date)}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                          rule.is_active
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        {rule.is_active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleToggleActive(rule)}
+                          disabled={updateRule.isPending}
+                          className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                        >
+                          {rule.is_active ? 'Desativar' : 'Reativar'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(rule.id)}
+                          disabled={deleteRule.isPending}
+                          className="text-xs font-medium text-red-600 hover:text-red-800"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Página Principal Admin ---
 
 export function AdminPage() {
   const isAuthenticated = useAdminStore((s) => s.isAuthenticated)
   const logout = useAdminStore((s) => s.logout)
-  const [activeTab, setActiveTab] = useState<'users' | 'lotacao' | 'upload'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'lotacao' | 'upload' | 'visibilidade'>('users')
 
   if (!isAuthenticated) {
     return <AdminLogin />
@@ -638,6 +1054,16 @@ export function AdminPage() {
             >
               Dados
             </button>
+            <button
+              onClick={() => setActiveTab('visibilidade')}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:py-2 sm:text-sm ${
+                activeTab === 'visibilidade'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Visibilidade
+            </button>
           </div>
           <button
             onClick={logout}
@@ -651,6 +1077,7 @@ export function AdminPage() {
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'lotacao' && <LotacaoTab />}
         {activeTab === 'upload' && <UploadTab />}
+        {activeTab === 'visibilidade' && <VisibilidadeTab />}
       </div>
     </>
   )

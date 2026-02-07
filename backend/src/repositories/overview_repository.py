@@ -1,12 +1,32 @@
 """Repositório para queries cross-table do dashboard Overview."""
 
-from sqlalchemy import func, select, text
+from sqlalchemy import DateTime, func, literal, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.constants import CATEGORIAS_NAO_PRODUTIVAS
 from src.domain.filters import GlobalFilters
-from src.domain.models import PecaFinalizada, Pendencia, ProcessoNovo
+from src.domain.models import (
+    HiddenProcuradorProducao,
+    PecaFinalizada,
+    Pendencia,
+    ProcessoNovo,
+)
 from src.domain.schemas import KPIValue, TimelinePoint, TimelineSeries
+from src.services.normalization import (
+    normalize_chefia_expr,
+    normalize_chefia_sql,
+    normalize_procurador_expr,
+)
+
+# Coluna resolvida para ocultação por tabela (mesma lógica do PROCURADOR_COL_MAP)
+_HIDDEN_RESOLVED_COL: dict[str, str] = {
+    "processos_novos": "procurador",
+    "pecas_finalizadas": "usuario_finalizacao",
+    "pendencias": "procurador",
+}
+
+# Tabelas que participam da ocultação
+_HIDDEN_TABLES = {"processos_novos", "pecas_finalizadas", "pendencias"}
 
 
 class OverviewRepository:
@@ -34,7 +54,8 @@ class OverviewRepository:
             clauses.append(f"{date_col} <= '{filters.data_fim}'")
         if filters.chefia:
             chefias = ",".join(f"'{c}'" for c in filters.chefia)
-            clauses.append(f"chefia IN ({chefias})")
+            chefia_norm = normalize_chefia_sql("chefia")
+            clauses.append(f"{chefia_norm} IN ({chefias})")
         if filters.procurador:
             procs = ",".join(f"'{p}'" for p in filters.procurador)
             clauses.append(f"procurador IN ({procs})")
@@ -43,6 +64,22 @@ class OverviewRepository:
         if table == "pecas_finalizadas":
             cats = ",".join(f"'{c}'" for c in CATEGORIAS_NAO_PRODUTIVAS)
             clauses.append(f"categoria NOT IN ({cats})")
+
+        # Excluir produção oculta por regras administrativas
+        if filters.exclude_hidden and table in _HIDDEN_TABLES:
+            resolved_col = _HIDDEN_RESOLVED_COL.get(table, "procurador")
+            proc_expr = f"TRIM(REGEXP_REPLACE({resolved_col}, '\\s*\\(.*\\)$', '', 'g'))"
+            chefia_expr = normalize_chefia_sql(f"{table}.chefia")
+            clauses.append(
+                f"NOT EXISTS ("
+                f"SELECT 1 FROM admin_hidden_procurador_producao h "
+                f"WHERE h.is_active = true "
+                f"AND h.procurador_name = {proc_expr} "
+                f"AND (h.chefia IS NULL OR h.chefia = {chefia_expr}) "
+                f"AND {date_col} >= h.start_date::timestamp "
+                f"AND {date_col} < (h.end_date + INTERVAL '1 day')::timestamp"
+                f")"
+            )
 
         return " AND ".join(clauses) if clauses else "1=1"
 
@@ -79,8 +116,41 @@ class OverviewRepository:
                 PecaFinalizada.categoria.notin_(CATEGORIAS_NAO_PRODUTIVAS)
             )
 
+        # Excluir produção oculta por regras administrativas
+        if filters.exclude_hidden and model.__tablename__ in _HIDDEN_TABLES:
+            stmt = self._apply_hidden_filter_orm(stmt, model, date_col)
+
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+    def _apply_hidden_filter_orm(self, stmt, model, date_col):
+        """Adiciona NOT EXISTS para excluir registros de procuradores ocultos."""
+        hidden = HiddenProcuradorProducao.__table__
+        resolved_col = _HIDDEN_RESOLVED_COL.get(
+            model.__tablename__, "procurador"
+        )
+        proc_col = normalize_procurador_expr(getattr(model, resolved_col))
+        chefia_col = normalize_chefia_expr(model.chefia)
+
+        exists_subq = (
+            select(literal(1))
+            .select_from(hidden)
+            .where(
+                hidden.c.is_active.is_(True),
+                hidden.c.procurador_name == proc_col,
+                or_(
+                    hidden.c.chefia.is_(None),
+                    hidden.c.chefia == chefia_col,
+                ),
+                date_col >= func.cast(hidden.c.start_date, DateTime),
+                date_col < func.cast(
+                    hidden.c.end_date + text("INTERVAL '1 day'"), DateTime
+                ),
+            )
+            .correlate(model)
+            .exists()
+        )
+        return stmt.where(~exists_subq)
 
     async def get_kpis(self, filters: GlobalFilters) -> list[KPIValue]:
         """Retorna os 3 KPIs principais do Overview (métricas de procurador).

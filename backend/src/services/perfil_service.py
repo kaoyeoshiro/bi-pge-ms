@@ -252,6 +252,9 @@ class PerfilService:
 
         comparativo = []
         for proc, metricas in totais.items():
+            # Excluir procuradores sem nenhuma pendência no histórico
+            if filters.exclude_no_pendencias and metricas["pendencias"] == 0:
+                continue
             total = sum(metricas.values())
             comparativo.append(
                 ProcuradorComparativo(

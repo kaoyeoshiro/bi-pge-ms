@@ -1,8 +1,18 @@
 """Modelos ORM SQLAlchemy 2.0 mapeando as tabelas existentes do banco pge_bi."""
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Date,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -104,6 +114,45 @@ class ProcuradorLotacao(Base):
     )
 
     __table_args__ = (UniqueConstraint("procurador", "chefia"),)
+
+
+class HiddenProcuradorProducao(Base):
+    """Regra de ocultação temporária da produção de um procurador.
+
+    Permite ao admin ocultar a produção de um procurador nas telas de chefia
+    por um período específico, sem alterar dados no banco.
+    """
+
+    __tablename__ = "admin_hidden_procurador_producao"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    procurador_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    chefia: Mapped[str | None] = mapped_column(String(200))  # NULL = global
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true"
+    )
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(
+        String(100), nullable=False, server_default="admin"
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now())
+
+    __table_args__ = (
+        Index(
+            "ix_hidden_proc_active", "procurador_name", "chefia", "is_active"
+        ),
+        Index(
+            "ix_hidden_dates_active",
+            "chefia",
+            "start_date",
+            "end_date",
+            "is_active",
+        ),
+        CheckConstraint("start_date <= end_date", name="ck_start_before_end"),
+    )
 
 
 # Mapeamento de nome da tabela para modelo ORM

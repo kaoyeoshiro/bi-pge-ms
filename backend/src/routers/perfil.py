@@ -30,6 +30,9 @@ async def get_kpis(
     session: AsyncSession = Depends(get_session),
 ) -> list[KPIValue]:
     """KPIs do indivíduo: totais nas 4 tabelas."""
+    if dimensao in ("procurador", "assessor"):
+        filters.exclude_hidden = False
+        filters.exclude_no_pendencias = False
     service = PerfilService(session)
     return await service.get_kpis(dimensao, valor, filters)
 
@@ -42,6 +45,9 @@ async def get_timeline(
     session: AsyncSession = Depends(get_session),
 ) -> list[TimelineSeries]:
     """Séries temporais mensais do indivíduo."""
+    if dimensao in ("procurador", "assessor"):
+        filters.exclude_hidden = False
+        filters.exclude_no_pendencias = False
     service = PerfilService(session)
     return await service.get_timeline(dimensao, valor, filters)
 
@@ -56,6 +62,9 @@ async def get_por_categoria(
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
     """Ranking por categoria de peça do indivíduo."""
+    if dimensao in ("procurador", "assessor"):
+        filters.exclude_hidden = False
+        filters.exclude_no_pendencias = False
     service = PerfilService(session)
     return await service.get_por_categoria(dimensao, valor, filters, tabela, limit)
 
@@ -70,6 +79,9 @@ async def get_por_modelo(
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
     """Ranking por modelo de peça do indivíduo."""
+    if dimensao in ("procurador", "assessor"):
+        filters.exclude_hidden = False
+        filters.exclude_no_pendencias = False
     service = PerfilService(session)
     return await service.get_por_modelo(dimensao, valor, filters, tabela, limit)
 
@@ -84,6 +96,9 @@ async def get_por_procurador(
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
     """Ranking por procurador: quais procuradores o assessor atendeu."""
+    if dimensao in ("procurador", "assessor"):
+        filters.exclude_hidden = False
+        filters.exclude_no_pendencias = False
     service = PerfilService(session)
     return await service.get_por_procurador(dimensao, valor, filters, tabela, limit)
 
@@ -127,5 +142,8 @@ async def get_lista(
     session: AsyncSession = Depends(get_session),
 ) -> PaginatedResponse:
     """Lista paginada de registros do indivíduo."""
+    if dimensao in ("procurador", "assessor"):
+        filters.exclude_hidden = False
+        filters.exclude_no_pendencias = False
     service = PerfilService(session)
     return await service.get_lista(dimensao, valor, filters, tabela, pagination)

@@ -1,8 +1,9 @@
 """Schemas Pydantic v2 para respostas da API."""
 
+from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class KPIValue(BaseModel):
@@ -101,3 +102,46 @@ class ChefiaMediasResponse(BaseModel):
     timeline: list[TimelineSeries]
     units_count: int
     unit_label: str
+
+
+# --- Ocultação de Produção ---
+
+
+class HiddenProcuradorCreate(BaseModel):
+    """Dados para criar regra de ocultação de produção."""
+
+    procurador_name: str
+    chefia: str | None = None
+    start_date: date
+    end_date: date
+    reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.start_date > self.end_date:
+            raise ValueError("start_date deve ser anterior ou igual a end_date")
+        return self
+
+
+class HiddenProcuradorUpdate(BaseModel):
+    """Dados para atualizar regra de ocultação."""
+
+    start_date: date | None = None
+    end_date: date | None = None
+    is_active: bool | None = None
+    reason: str | None = None
+
+
+class HiddenProcuradorResponse(BaseModel):
+    """Resposta com dados de uma regra de ocultação."""
+
+    id: int
+    procurador_name: str
+    chefia: str | None
+    start_date: date
+    end_date: date
+    is_active: bool
+    reason: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime | None

@@ -3,14 +3,14 @@
 import math
 from datetime import datetime
 
-from sqlalchemy import Column, Select, func, literal, select, or_, String, cast, desc, asc
+from sqlalchemy import Column, DateTime, Select, func, literal, select, or_, String, cast, desc, asc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
 from src.domain.constants import CATEGORIAS_NAO_PRODUTIVAS
 from src.domain.enums import Granularity
 from src.domain.filters import GlobalFilters, PaginationParams
-from src.domain.models import PecaFinalizada, UserRole
+from src.domain.models import HiddenProcuradorProducao, PecaFinalizada, Pendencia, UserRole
 from src.domain.schemas import GroupCount, PaginatedResponse, TimelinePoint
 from src.services.normalization import normalize_chefia_expr, normalize_procurador_expr
 
@@ -21,6 +21,9 @@ ASSESSOR_COL_MAP: dict[str, str] = {
     "pecas_finalizadas": "usuario_finalizacao",
     "pendencias": "usuario_cumpridor_pendencia",
 }
+
+# Tabelas que participam da ocultação de produção (métricas de procurador)
+HIDDEN_TABLES = {"processos_novos", "pecas_finalizadas", "pendencias"}
 
 # Coluna real de "procurador" por tabela.
 # Em pecas_finalizadas, o campo `procurador` é o dono do caso, mas quem
@@ -97,7 +100,41 @@ class BaseRepository:
                 PecaFinalizada.categoria.notin_(CATEGORIAS_NAO_PRODUTIVAS)
             )
 
+        # Excluir produção oculta por regras administrativas
+        if filters.exclude_hidden and self.model.__tablename__ in HIDDEN_TABLES:
+            stmt = self._apply_hidden_filter(stmt)
+
         return stmt
+
+    def _apply_hidden_filter(self, stmt: Select) -> Select:
+        """Adiciona NOT EXISTS para excluir registros de procuradores ocultos."""
+        hidden = HiddenProcuradorProducao.__table__
+        date_col = self._get_date_column()
+
+        # Coluna resolvida (mesma lógica dos rankings)
+        resolved = self._resolve_column("procurador")
+        proc_col = normalize_procurador_expr(getattr(self.model, resolved))
+        chefia_col = normalize_chefia_expr(self.model.chefia)
+
+        exists_subq = (
+            select(literal(1))
+            .select_from(hidden)
+            .where(
+                hidden.c.is_active.is_(True),
+                hidden.c.procurador_name == proc_col,
+                or_(
+                    hidden.c.chefia.is_(None),
+                    hidden.c.chefia == chefia_col,
+                ),
+                date_col >= func.cast(hidden.c.start_date, DateTime),
+                date_col < func.cast(
+                    hidden.c.end_date + text("INTERVAL '1 day'"), DateTime
+                ),
+            )
+            .correlate(self.model)
+            .exists()
+        )
+        return stmt.where(~exists_subq)
 
     async def total_count(self, filters: GlobalFilters) -> int:
         """Conta total de registros com filtros aplicados."""
@@ -154,6 +191,16 @@ class BaseRepository:
             .scalar_subquery()
         )
 
+    @staticmethod
+    def _has_pendencias_subquery() -> Select:
+        """Subquery com procuradores que possuem ao menos 1 pendência no histórico."""
+        return (
+            select(func.distinct(Pendencia.procurador))
+            .where(Pendencia.procurador.isnot(None))
+            .where(Pendencia.procurador != "")
+            .scalar_subquery()
+        )
+
     def _get_filter_expr(self, column_name: str) -> Column:
         """Retorna expressão de filtro com normalização (sem resolução de coluna).
 
@@ -206,6 +253,10 @@ class BaseRepository:
         # Filtrar por role de procurador quando agrupando por "procurador"
         if group_column == "procurador":
             stmt = stmt.where(col.in_(self._procurador_names_subquery()))
+
+            # Excluir procuradores sem nenhuma pendência no histórico
+            if filters.exclude_no_pendencias:
+                stmt = stmt.where(col.in_(self._has_pendencias_subquery()))
 
         stmt = self._apply_global_filters(stmt, filters)
 

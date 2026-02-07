@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../client'
 import type {
+  HiddenProcuradorCreate,
+  HiddenProcuradorRule,
+  HiddenProcuradorUpdate,
   PopulateResult,
   ProcuradorLotacao,
   TableStat,
@@ -187,5 +190,73 @@ export function useChefiaOptions() {
       return data
     },
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+// --- Ocultação de Produção ---
+
+/** Lista regras de ocultação de produção. */
+export function useHiddenProducaoRules(onlyActive = true) {
+  return useQuery<HiddenProcuradorRule[]>({
+    queryKey: ['admin-hidden-producao', onlyActive],
+    queryFn: async () => {
+      const { data } = await api.get(
+        `/admin/hidden-producao?only_active=${onlyActive}`,
+        { headers: getAuthHeader() }
+      )
+      return data
+    },
+    staleTime: 30_000,
+  })
+}
+
+/** Mutation para criar regra de ocultação. */
+export function useCreateHiddenRule() {
+  const queryClient = useQueryClient()
+  return useMutation<HiddenProcuradorRule, Error, HiddenProcuradorCreate>({
+    mutationFn: async (body) => {
+      const { data } = await api.post('/admin/hidden-producao', body, {
+        headers: getAuthHeader(),
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-hidden-producao'] })
+    },
+  })
+}
+
+/** Mutation para atualizar regra de ocultação. */
+export function useUpdateHiddenRule() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    HiddenProcuradorRule,
+    Error,
+    { id: number; data: HiddenProcuradorUpdate }
+  >({
+    mutationFn: async ({ id, data: body }) => {
+      const { data } = await api.put(`/admin/hidden-producao/${id}`, body, {
+        headers: getAuthHeader(),
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-hidden-producao'] })
+    },
+  })
+}
+
+/** Mutation para remover regra de ocultação. */
+export function useDeleteHiddenRule() {
+  const queryClient = useQueryClient()
+  return useMutation<void, Error, number>({
+    mutationFn: async (id) => {
+      await api.delete(`/admin/hidden-producao/${id}`, {
+        headers: getAuthHeader(),
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-hidden-producao'] })
+    },
   })
 }

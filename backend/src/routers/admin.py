@@ -8,9 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
 from src.dependencies import verify_admin
+from src.domain.schemas import (
+    HiddenProcuradorCreate,
+    HiddenProcuradorResponse,
+    HiddenProcuradorUpdate,
+)
 from src.services.admin_service import (
     AdminAuthService,
     ExcelImportService,
+    HiddenProducaoService,
     LotacaoService,
     TableStatsService,
     UserRoleService,
@@ -216,3 +222,70 @@ async def table_stats(
     """Retorna contagem de linhas de cada tabela."""
     service = TableStatsService(session)
     return await service.get_stats()
+
+
+# --- Endpoints de Ocultação de Produção ---
+
+
+@router.get(
+    "/hidden-producao",
+    response_model=list[HiddenProcuradorResponse],
+)
+async def list_hidden_rules(
+    only_active: bool = True,
+    session: AsyncSession = Depends(get_session),
+    _: bool = Depends(verify_admin),
+):
+    """Lista regras de ocultação de produção."""
+    service = HiddenProducaoService(session)
+    return await service.list_rules(only_active)
+
+
+@router.post(
+    "/hidden-producao",
+    response_model=HiddenProcuradorResponse,
+    status_code=201,
+)
+async def create_hidden_rule(
+    body: HiddenProcuradorCreate,
+    session: AsyncSession = Depends(get_session),
+    _: bool = Depends(verify_admin),
+):
+    """Cria nova regra de ocultação de produção."""
+    service = HiddenProducaoService(session)
+    try:
+        return await service.create_rule(body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put(
+    "/hidden-producao/{rule_id}",
+    response_model=HiddenProcuradorResponse,
+)
+async def update_hidden_rule(
+    rule_id: int,
+    body: HiddenProcuradorUpdate,
+    session: AsyncSession = Depends(get_session),
+    _: bool = Depends(verify_admin),
+):
+    """Atualiza regra de ocultação de produção."""
+    service = HiddenProducaoService(session)
+    try:
+        return await service.update_rule(rule_id, body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/hidden-producao/{rule_id}", status_code=204)
+async def delete_hidden_rule(
+    rule_id: int,
+    session: AsyncSession = Depends(get_session),
+    _: bool = Depends(verify_admin),
+):
+    """Remove regra de ocultação de produção."""
+    service = HiddenProducaoService(session)
+    try:
+        await service.delete_rule(rule_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

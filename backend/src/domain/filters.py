@@ -17,6 +17,8 @@ class GlobalFilters:
     categoria: list[str] = field(default_factory=list)
     area: list[str] = field(default_factory=list)
     assessor: list[str] = field(default_factory=list)
+    exclude_hidden: bool = True
+    exclude_no_pendencias: bool = True
 
 
 @dataclass

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.domain.models import (
+    HiddenProcuradorProducao,
     PecaElaborada,
     PecaFinalizada,
     Pendencia,
@@ -21,6 +22,7 @@ from src.domain.models import (
     TABLE_MODEL_MAP,
     UserRole,
 )
+from src.domain.schemas import HiddenProcuradorCreate, HiddenProcuradorResponse, HiddenProcuradorUpdate
 from src.services.normalization import normalize_chefia_expr
 from src.services.cache import clear_all_caches
 
@@ -536,3 +538,148 @@ class TableStatsService:
             count = result.scalar() or 0
             stats.append({"tabela": table_name, "total": count})
         return stats
+
+
+class HiddenProducaoService:
+    """Gerencia regras de ocultação temporária de produção de procuradores."""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def list_rules(
+        self, only_active: bool = True
+    ) -> list[HiddenProcuradorResponse]:
+        """Lista regras de ocultação, opcionalmente filtrando apenas ativas."""
+        stmt = select(HiddenProcuradorProducao).order_by(
+            HiddenProcuradorProducao.created_at.desc()
+        )
+        if only_active:
+            stmt = stmt.where(HiddenProcuradorProducao.is_active.is_(True))
+        result = await self.session.execute(stmt)
+        return [
+            HiddenProcuradorResponse(
+                id=row.id,
+                procurador_name=row.procurador_name,
+                chefia=row.chefia,
+                start_date=row.start_date,
+                end_date=row.end_date,
+                is_active=row.is_active,
+                reason=row.reason,
+                created_by=row.created_by,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+            for row in result.scalars().all()
+        ]
+
+    async def create_rule(
+        self, data: HiddenProcuradorCreate
+    ) -> HiddenProcuradorResponse:
+        """Cria nova regra de ocultação.
+
+        Valida duplicatas (mesmo procurador + chefia com período sobreposto).
+        """
+        # Verificar sobreposição de período
+        overlap_stmt = (
+            select(HiddenProcuradorProducao)
+            .where(
+                HiddenProcuradorProducao.procurador_name == data.procurador_name,
+                HiddenProcuradorProducao.is_active.is_(True),
+                HiddenProcuradorProducao.start_date <= data.end_date,
+                HiddenProcuradorProducao.end_date >= data.start_date,
+            )
+        )
+        if data.chefia is None:
+            overlap_stmt = overlap_stmt.where(
+                HiddenProcuradorProducao.chefia.is_(None)
+            )
+        else:
+            overlap_stmt = overlap_stmt.where(
+                HiddenProcuradorProducao.chefia == data.chefia
+            )
+        result = await self.session.execute(overlap_stmt)
+        if result.scalars().first():
+            raise ValueError(
+                "Já existe regra ativa com período sobreposto para este procurador/chefia."
+            )
+
+        rule = HiddenProcuradorProducao(
+            procurador_name=data.procurador_name,
+            chefia=data.chefia,
+            start_date=data.start_date,
+            end_date=data.end_date,
+            reason=data.reason,
+        )
+        self.session.add(rule)
+        await self.session.commit()
+        await self.session.refresh(rule)
+        clear_all_caches()
+
+        return HiddenProcuradorResponse(
+            id=rule.id,
+            procurador_name=rule.procurador_name,
+            chefia=rule.chefia,
+            start_date=rule.start_date,
+            end_date=rule.end_date,
+            is_active=rule.is_active,
+            reason=rule.reason,
+            created_by=rule.created_by,
+            created_at=rule.created_at,
+            updated_at=rule.updated_at,
+        )
+
+    async def update_rule(
+        self, rule_id: int, data: HiddenProcuradorUpdate
+    ) -> HiddenProcuradorResponse:
+        """Atualiza uma regra de ocultação existente."""
+        stmt = select(HiddenProcuradorProducao).where(
+            HiddenProcuradorProducao.id == rule_id
+        )
+        result = await self.session.execute(stmt)
+        rule = result.scalars().first()
+        if not rule:
+            raise ValueError(f"Regra #{rule_id} não encontrada.")
+
+        if data.start_date is not None:
+            rule.start_date = data.start_date
+        if data.end_date is not None:
+            rule.end_date = data.end_date
+        if data.is_active is not None:
+            rule.is_active = data.is_active
+        if data.reason is not None:
+            rule.reason = data.reason
+
+        # Validar datas após update
+        if rule.start_date > rule.end_date:
+            raise ValueError("start_date deve ser anterior ou igual a end_date.")
+
+        await self.session.commit()
+        await self.session.refresh(rule)
+        clear_all_caches()
+
+        return HiddenProcuradorResponse(
+            id=rule.id,
+            procurador_name=rule.procurador_name,
+            chefia=rule.chefia,
+            start_date=rule.start_date,
+            end_date=rule.end_date,
+            is_active=rule.is_active,
+            reason=rule.reason,
+            created_by=rule.created_by,
+            created_at=rule.created_at,
+            updated_at=rule.updated_at,
+        )
+
+    async def delete_rule(self, rule_id: int) -> None:
+        """Remove uma regra de ocultação permanentemente."""
+        stmt = select(HiddenProcuradorProducao).where(
+            HiddenProcuradorProducao.id == rule_id
+        )
+        result = await self.session.execute(stmt)
+        rule = result.scalars().first()
+        if not rule:
+            raise ValueError(f"Regra #{rule_id} não encontrada.")
+
+        await self.session.delete(rule)
+        await self.session.commit()
+        clear_all_caches()

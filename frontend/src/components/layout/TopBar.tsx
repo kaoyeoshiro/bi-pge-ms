@@ -1,7 +1,9 @@
+import { useAdminStore } from '../../stores/useAdminStore'
 import { useSidebar } from './AppShell'
 
 export function TopBar({ title }: { title: string }) {
   const { toggle } = useSidebar()
+  const isAdmin = useAdminStore((s) => s.isAuthenticated)
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center border-b border-gray-200 bg-surface px-4 sm:px-6">
@@ -15,6 +17,11 @@ export function TopBar({ title }: { title: string }) {
         </svg>
       </button>
       <h2 className="text-lg font-semibold text-primary">{title}</h2>
+      {isAdmin && (
+        <span className="ml-3 rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">
+          ADMIN
+        </span>
+      )}
     </header>
   )
 }

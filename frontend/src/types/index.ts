@@ -125,3 +125,33 @@ export interface ProcuradorLotacao {
   procurador: string
   chefias: string[]
 }
+
+// --- Ocultação de Produção ---
+
+export interface HiddenProcuradorRule {
+  id: number
+  procurador_name: string
+  chefia: string | null
+  start_date: string
+  end_date: string
+  is_active: boolean
+  reason: string | null
+  created_by: string
+  created_at: string
+  updated_at: string | null
+}
+
+export interface HiddenProcuradorCreate {
+  procurador_name: string
+  chefia?: string | null
+  start_date: string
+  end_date: string
+  reason?: string | null
+}
+
+export interface HiddenProcuradorUpdate {
+  start_date?: string
+  end_date?: string
+  is_active?: boolean
+  reason?: string
+}

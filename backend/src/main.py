@@ -65,7 +65,31 @@ async def lifespan(app: FastAPI):
                 UNIQUE(procurador, chefia)
             )
         """))
-    logger.info("Tabelas user_roles e procurador_lotacoes verificadas.")
+        # Tabela de ocultação temporária de produção
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS admin_hidden_procurador_producao (
+                id SERIAL PRIMARY KEY,
+                procurador_name VARCHAR(300) NOT NULL,
+                chefia VARCHAR(200),
+                start_date DATE NOT NULL,
+                end_date DATE NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                reason TEXT,
+                created_by VARCHAR(100) NOT NULL DEFAULT 'admin',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP,
+                CONSTRAINT ck_start_before_end CHECK (start_date <= end_date)
+            )
+        """))
+        await conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_hidden_proc_active
+            ON admin_hidden_procurador_producao(procurador_name, chefia, is_active)
+        """))
+        await conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_hidden_dates_active
+            ON admin_hidden_procurador_producao(chefia, start_date, end_date, is_active)
+        """))
+    logger.info("Tabelas auxiliares verificadas.")
     yield
     await engine.dispose()
     logger.info("BI PGE-MS encerrado.")
