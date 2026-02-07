@@ -1,6 +1,6 @@
 """Testes para médias de chefia (helpers e endpoint).
 
-Testes unitários (sem banco): resolve_date_range e compute_units_count.
+Testes unitários (sem banco): _compute_units_from_timelines e compute_units_count.
 Testes de integração (com banco): endpoint chefia-medias via PerfilService.
 """
 
@@ -9,59 +9,106 @@ from datetime import date
 import pytest
 
 from src.domain.filters import GlobalFilters
+from src.domain.schemas import TimelinePoint
 from src.services.perfil_service import PerfilService
 
 
-# --- Testes unitários: resolve_date_range ---
+# --- Testes unitários: _compute_units_from_timelines ---
 
 
-def test_resolve_date_range_com_anos():
-    """anos=[2025] → jan a dez de 2025."""
-    filters = GlobalFilters(anos=[2025])
-    start, end = PerfilService.resolve_date_range(filters)
+def test_compute_from_timelines_range_mensal():
+    """Timelines de jan a jun/2025 → 6 meses."""
+    timelines = {
+        "processos_novos": [
+            TimelinePoint(periodo="2025-01", valor=10),
+            TimelinePoint(periodo="2025-03", valor=5),
+        ],
+        "pecas_finalizadas": [
+            TimelinePoint(periodo="2025-02", valor=8),
+            TimelinePoint(periodo="2025-06", valor=3),
+        ],
+        "pendencias": [],
+    }
 
-    assert start == date(2025, 1, 1)
-    assert end == date(2025, 12, 31)
+    count, label = PerfilService._compute_units_from_timelines(timelines, "month")
 
-
-def test_resolve_date_range_com_anos_e_mes():
-    """anos=[2025], mes=3 → março de 2025."""
-    filters = GlobalFilters(anos=[2025], mes=3)
-    start, end = PerfilService.resolve_date_range(filters)
-
-    assert start == date(2025, 3, 1)
-    assert end == date(2025, 3, 31)
-
-
-def test_resolve_date_range_com_range_explicito():
-    """data_inicio/data_fim direto → usa os valores fornecidos."""
-    filters = GlobalFilters(
-        data_inicio=date(2025, 6, 15),
-        data_fim=date(2025, 9, 20),
-    )
-    start, end = PerfilService.resolve_date_range(filters)
-
-    assert start == date(2025, 6, 15)
-    assert end == date(2025, 9, 20)
+    assert count == 6
+    assert label == "meses"
 
 
-def test_resolve_date_range_com_multiplos_anos():
-    """anos=[2024, 2025] → jan/2024 a dez/2025."""
-    filters = GlobalFilters(anos=[2024, 2025])
-    start, end = PerfilService.resolve_date_range(filters)
+def test_compute_from_timelines_vazia():
+    """Sem dados em nenhuma timeline → retorna 1."""
+    timelines = {
+        "processos_novos": [],
+        "pecas_finalizadas": [],
+        "pendencias": [],
+    }
 
-    assert start == date(2024, 1, 1)
-    assert end == date(2025, 12, 31)
+    count, label = PerfilService._compute_units_from_timelines(timelines, "month")
+
+    assert count == 1
+    assert label == "meses"
 
 
-def test_resolve_date_range_fallback():
-    """Sem filtros → ano corrente até hoje."""
-    filters = GlobalFilters()
-    start, end = PerfilService.resolve_date_range(filters)
+def test_compute_from_timelines_um_periodo():
+    """Apenas um mês com dados → retorna 1 mês."""
+    timelines = {
+        "processos_novos": [TimelinePoint(periodo="2025-07", valor=20)],
+        "pecas_finalizadas": [],
+        "pendencias": [],
+    }
 
-    today = date.today()
-    assert start == date(today.year, 1, 1)
-    assert end == today
+    count, label = PerfilService._compute_units_from_timelines(timelines, "month")
+
+    assert count == 1
+    assert label == "meses"
+
+
+def test_compute_from_timelines_unidade_dia():
+    """Range jan-mar/2025 em dias = 90 dias (31+28+31)."""
+    timelines = {
+        "processos_novos": [
+            TimelinePoint(periodo="2025-01", valor=10),
+            TimelinePoint(periodo="2025-03", valor=5),
+        ],
+    }
+
+    count, label = PerfilService._compute_units_from_timelines(timelines, "day")
+
+    assert count == 90
+    assert label == "dias"
+
+
+def test_compute_from_timelines_unidade_ano():
+    """Range 2024-01 a 2025-06 → 2 anos."""
+    timelines = {
+        "processos_novos": [
+            TimelinePoint(periodo="2024-01", valor=10),
+        ],
+        "pecas_finalizadas": [
+            TimelinePoint(periodo="2025-06", valor=5),
+        ],
+    }
+
+    count, label = PerfilService._compute_units_from_timelines(timelines, "year")
+
+    assert count == 2
+    assert label == "anos"
+
+
+def test_compute_from_timelines_cross_table_union():
+    """Min/max calculados pela UNIÃO de todas as tabelas."""
+    timelines = {
+        "processos_novos": [TimelinePoint(periodo="2025-04", valor=1)],
+        "pecas_finalizadas": [TimelinePoint(periodo="2025-01", valor=1)],
+        "pendencias": [TimelinePoint(periodo="2025-09", valor=1)],
+    }
+
+    count, label = PerfilService._compute_units_from_timelines(timelines, "month")
+
+    # jan a set = 9 meses
+    assert count == 9
+    assert label == "meses"
 
 
 # --- Testes unitários: compute_units_count ---

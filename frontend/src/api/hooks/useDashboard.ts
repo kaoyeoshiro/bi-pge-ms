@@ -3,6 +3,17 @@ import api, { buildQueryString } from '../client'
 import { useFilterParams } from './useFilterParams'
 import type { GroupCount, KPIValue, TimelineSeries } from '../../types'
 
+export function useLastUpdated() {
+  return useQuery<string | null>({
+    queryKey: ['last-updated'],
+    queryFn: async () => {
+      const { data } = await api.get('/dashboard/last-updated')
+      return data.data
+    },
+    staleTime: 1000 * 60 * 60,
+  })
+}
+
 export function useDashboardKPIs() {
   const params = useFilterParams()
   return useQuery<KPIValue[]>({

@@ -1,5 +1,6 @@
 """Serviço para análise individualizada de procurador ou chefia."""
 
+import calendar
 import logging
 from collections import defaultdict
 from dataclasses import asdict
@@ -277,28 +278,36 @@ class PerfilService:
     # --- Helpers para médias de chefia ---
 
     @staticmethod
-    def resolve_date_range(filters: GlobalFilters) -> tuple[date, date]:
-        """Resolve o intervalo de datas a partir dos filtros globais.
+    def _compute_units_from_timelines(
+        timelines: dict[str, list[TimelinePoint]],
+        unit: str,
+    ) -> tuple[int, str]:
+        """Deriva o número de unidades temporais a partir das timelines coletadas.
 
-        Prioridade: data_inicio/data_fim > anos+mes > anos > fallback (ano corrente).
+        Extrai min/max período ("YYYY-MM") da união de todas as timelines
+        e calcula a contagem de unidades via compute_units_count().
+        Garante mínimo de 1 para evitar divisão por zero.
         """
-        today = date.today()
+        all_periods: set[str] = set()
+        for points in timelines.values():
+            for p in points:
+                all_periods.add(p.periodo)
 
-        if filters.data_inicio and filters.data_fim:
-            return filters.data_inicio, filters.data_fim
+        if not all_periods:
+            label_map = {"day": "dias", "month": "meses", "year": "anos"}
+            return 1, label_map.get(unit, unit)
 
-        if filters.anos:
-            min_year = min(filters.anos)
-            max_year = max(filters.anos)
+        min_period = min(all_periods)
+        max_period = max(all_periods)
 
-            if filters.mes:
-                import calendar
-                _, last_day = calendar.monthrange(max_year, filters.mes)
-                return date(min_year, filters.mes, 1), date(max_year, filters.mes, last_day)
+        start = date(int(min_period[:4]), int(min_period[5:7]), 1)
 
-            return date(min_year, 1, 1), date(max_year, 12, 31)
+        max_year = int(max_period[:4])
+        max_month = int(max_period[5:7])
+        _, last_day = calendar.monthrange(max_year, max_month)
+        end = date(max_year, max_month, last_day)
 
-        return date(today.year, 1, 1), today
+        return PerfilService.compute_units_count(start, end, unit)
 
     @staticmethod
     def compute_units_count(
@@ -424,9 +433,8 @@ class PerfilService:
                 totals[table_name] = await self.repos[table_name].total_count(f)
                 timelines[table_name] = await self.repos[table_name].count_by_period(f)
 
-        # Calcula médias
-        start, end = self.resolve_date_range(filters)
-        units, unit_label = self.compute_units_count(start, end, average_unit)
+        # Calcula médias a partir do range real das timelines coletadas
+        units, unit_label = self._compute_units_from_timelines(timelines, average_unit)
 
         kpis = []
         for table_name, label in labels.items():
