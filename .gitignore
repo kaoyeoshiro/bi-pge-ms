@@ -1,0 +1,59 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+venv/
+.venv/
+env/
+
+# === Node ===
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# === Ambiente ===
+.env
+.env.local
+.env.production
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# === Dados sensíveis ===
+planilhas/
+data/
+*.xlsx
+*.xls
+*.csv
+migracao.log
+
+# === Testes e cobertura ===
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# === Outros ===
+*.bak
+*.tmp
+*.log
+nul
+.playwright-mcp/

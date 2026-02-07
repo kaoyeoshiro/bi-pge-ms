@@ -1,0 +1,38 @@
+# Dependências (serão instaladas no build)
+node_modules/
+frontend/node_modules/
+frontend/dist/
+venv/
+.venv/
+__pycache__/
+
+# Ambiente local
+.env
+.env.local
+.env.production
+
+# Dados e planilhas
+planilhas/
+data/
+*.xlsx
+*.xls
+*.csv
+migracao.log
+
+# Git e IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Documentação e imagens
+*.md
+*.png
+*.jpg
+!frontend/public/logo-pge.png
+!frontend/index.html
+
+# Testes
+tests/
+.pytest_cache/
+htmlcov/
