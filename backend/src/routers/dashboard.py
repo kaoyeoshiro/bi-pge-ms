@@ -35,10 +35,10 @@ async def get_timeline(
 @router.get("/top-chefias", response_model=list[GroupCount])
 async def get_top_chefias(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     metrica: str = Query(
-        "pecas_elaboradas",
-        pattern=r"^(processos_novos|pecas_elaboradas|pecas_finalizadas|pendencias)$",
+        "pecas_finalizadas",
+        pattern=r"^(processos_novos|pecas_finalizadas|pendencias)$",
     ),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
@@ -50,10 +50,10 @@ async def get_top_chefias(
 @router.get("/top-procuradores", response_model=list[GroupCount])
 async def get_top_procuradores(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     metrica: str = Query(
-        "pecas_elaboradas",
-        pattern=r"^(processos_novos|pecas_elaboradas|pecas_finalizadas|pendencias)$",
+        "pecas_finalizadas",
+        pattern=r"^(processos_novos|pecas_finalizadas|pendencias)$",
     ),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:

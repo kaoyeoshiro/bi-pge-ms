@@ -25,7 +25,7 @@ export function useProcessosTimeline() {
   })
 }
 
-export function useProcessosPorGrupo(grupo: string, limit = 15) {
+export function useProcessosPorGrupo(grupo: string, limit = 500) {
   const params = useFilterParams()
   return useQuery<GroupCount[]>({
     queryKey: [`processos-por-${grupo}`, params, limit],

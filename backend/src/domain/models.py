@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, String, Text, func
+from sqlalchemy import BigInteger, Boolean, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -83,9 +83,27 @@ class UserRole(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(300), unique=True, nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
+    carga_reduzida: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     updated_at: Mapped[datetime | None] = mapped_column(
         server_default=func.now(), onupdate=func.now()
     )
+
+
+class ProcuradorLotacao(Base):
+    """Lotação de procuradores em chefias (1 procurador → N chefias)."""
+
+    __tablename__ = "procurador_lotacoes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    procurador: Mapped[str] = mapped_column(String(300), nullable=False)
+    chefia: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (UniqueConstraint("procurador", "chefia"),)
 
 
 # Mapeamento de nome da tabela para modelo ORM

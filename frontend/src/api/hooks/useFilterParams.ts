@@ -6,7 +6,7 @@ import { useFilterStore } from '../../stores/useFilterStore'
  * os query params de forma estável (sem criar novo objeto a cada render).
  */
 export function useFilterParams() {
-  const ano = useFilterStore((s) => s.ano)
+  const anos = useFilterStore((s) => s.anos)
   const mes = useFilterStore((s) => s.mes)
   const dataInicio = useFilterStore((s) => s.dataInicio)
   const dataFim = useFilterStore((s) => s.dataFim)
@@ -17,7 +17,7 @@ export function useFilterParams() {
 
   return useMemo(() => {
     const params: Record<string, string | string[]> = {}
-    if (ano) params.ano = String(ano)
+    if (anos.length) params.anos = anos.map(String)
     if (mes) params.mes = String(mes)
     if (dataInicio) params.data_inicio = dataInicio
     if (dataFim) params.data_fim = dataFim
@@ -26,5 +26,5 @@ export function useFilterParams() {
     if (categorias.length) params.categoria = categorias
     if (areas.length) params.area = areas
     return params
-  }, [ano, mes, dataInicio, dataFim, chefias, procuradores, categorias, areas])
+  }, [anos, mes, dataInicio, dataFim, chefias, procuradores, categorias, areas])
 }

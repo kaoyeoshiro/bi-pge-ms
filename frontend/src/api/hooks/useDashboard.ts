@@ -25,7 +25,7 @@ export function useDashboardTimeline() {
   })
 }
 
-export function useTopChefias(metrica = 'pecas_elaboradas', limit = 10) {
+export function useTopChefias(metrica = 'pecas_elaboradas', limit = 500) {
   const params = useFilterParams()
   return useQuery<GroupCount[]>({
     queryKey: ['dashboard-top-chefias', params, metrica, limit],
@@ -38,7 +38,7 @@ export function useTopChefias(metrica = 'pecas_elaboradas', limit = 10) {
   })
 }
 
-export function useTopProcuradores(metrica = 'pecas_elaboradas', limit = 10) {
+export function useTopProcuradores(metrica = 'pecas_elaboradas', limit = 500) {
   const params = useFilterParams()
   return useQuery<GroupCount[]>({
     queryKey: ['dashboard-top-procuradores', params, metrica, limit],

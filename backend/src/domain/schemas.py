@@ -56,11 +56,14 @@ class FilterOptions(BaseModel):
 
 
 class ProcuradorComparativo(BaseModel):
-    """Métricas de um procurador para comparativo dentro de uma chefia."""
+    """Métricas de procurador para comparativo dentro de uma chefia.
+
+    Apenas métricas de procurador (dono do caso).
+    Peças elaboradas é métrica de assessor e não aparece aqui.
+    """
 
     procurador: str
     processos_novos: int = 0
-    pecas_elaboradas: int = 0
     pecas_finalizadas: int = 0
     pendencias: int = 0
     total: int = 0
@@ -81,3 +84,20 @@ class TableSchema(BaseModel):
     label: str
     columns: list[ColumnSchema]
     total_rows: int
+
+
+class ChefiaMediaKPI(BaseModel):
+    """KPI com total e média para visão de chefia."""
+
+    label: str
+    total: int
+    media: float
+
+
+class ChefiaMediasResponse(BaseModel):
+    """Resposta com KPIs em totais/médias e timeline filtrada."""
+
+    kpis: list[ChefiaMediaKPI]
+    timeline: list[TimelineSeries]
+    units_count: int
+    unit_label: str

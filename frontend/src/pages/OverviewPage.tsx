@@ -10,21 +10,22 @@ import {
   useTopChefias,
   useTopProcuradores,
 } from '../api/hooks/useDashboard'
+import { useCargaReduzida } from '../api/hooks/useFilters'
 
 const METRICA_OPTIONS = [
-  { value: 'pecas_elaboradas', label: 'Peças Elaboradas' },
-  { value: 'processos_novos', label: 'Processos Novos' },
-  { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
   { value: 'pendencias', label: 'Pendências' },
+  { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
+  { value: 'processos_novos', label: 'Processos Novos' },
 ] as const
 
 export function OverviewPage() {
-  const [metrica, setMetrica] = useState('pecas_elaboradas')
+  const [metrica, setMetrica] = useState('pendencias')
 
   const kpis = useDashboardKPIs()
   const timeline = useDashboardTimeline()
   const topChefias = useTopChefias(metrica)
   const topProcuradores = useTopProcuradores(metrica)
+  const { crSet } = useCargaReduzida()
 
   const metricaLabel = METRICA_OPTIONS.find((m) => m.value === metrica)?.label ?? metrica
 
@@ -32,7 +33,7 @@ export function OverviewPage() {
     <>
       <TopBar title="Visão Geral" />
       <FilterBar />
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
         <KPIGrid data={kpis.data} isLoading={kpis.isLoading} isError={kpis.isError} />
 
         <LineChartCard
@@ -42,8 +43,8 @@ export function OverviewPage() {
           isError={timeline.isError}
         />
 
-        <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-5 py-3">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-3 py-2 sm:px-5 sm:py-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="text-sm font-semibold text-gray-700">Rankings por:</span>
             {METRICA_OPTIONS.map((opt) => (
               <button
@@ -63,16 +64,17 @@ export function OverviewPage() {
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <BarChartCard
-            title={`Top 10 Chefias — ${metricaLabel}`}
+            title={`Ranking Chefias — ${metricaLabel}`}
             data={topChefias.data}
             isLoading={topChefias.isLoading}
             isError={topChefias.isError}
           />
           <BarChartCard
-            title={`Top 10 Procuradores — ${metricaLabel}`}
+            title={`Ranking Procuradores — ${metricaLabel}`}
             data={topProcuradores.data}
             isLoading={topProcuradores.isLoading}
             isError={topProcuradores.isError}
+            cargaReduzidaSet={crSet}
           />
         </div>
       </div>

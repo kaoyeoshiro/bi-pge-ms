@@ -40,7 +40,7 @@ async def get_timeline(
 @router.get("/por-categoria", response_model=list[GroupCount])
 async def get_por_categoria(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(15, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     tipo: str = Query("elaboradas", pattern=r"^(elaboradas|finalizadas)$"),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
@@ -52,7 +52,7 @@ async def get_por_categoria(
 @router.get("/por-chefia", response_model=list[GroupCount])
 async def get_por_chefia(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(15, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     tipo: str = Query("elaboradas", pattern=r"^(elaboradas|finalizadas)$"),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
@@ -64,7 +64,7 @@ async def get_por_chefia(
 @router.get("/por-procurador", response_model=list[GroupCount])
 async def get_por_procurador(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(15, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     tipo: str = Query("elaboradas", pattern=r"^(elaboradas|finalizadas)$"),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
@@ -76,7 +76,7 @@ async def get_por_procurador(
 @router.get("/por-usuario", response_model=list[GroupCount])
 async def get_por_usuario(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(15, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     tipo: str = Query("elaboradas", pattern=r"^(elaboradas|finalizadas)$"),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:

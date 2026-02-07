@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -16,6 +17,9 @@ import { CHART_COLORS } from '../../utils/colors'
 import { formatNumber } from '../../utils/formatters'
 import type { GroupCount } from '../../types'
 
+const INITIAL_VISIBLE = 15
+const EXPAND_STEP = 30
+
 interface BarChartCardProps {
   title: string
   data: GroupCount[] | undefined
@@ -23,6 +27,7 @@ interface BarChartCardProps {
   isError: boolean
   layout?: 'horizontal' | 'vertical'
   onClick?: (grupo: string) => void
+  cargaReduzidaSet?: Set<string>
 }
 
 export function BarChartCard({
@@ -32,42 +37,62 @@ export function BarChartCard({
   isError,
   layout = 'horizontal',
   onClick,
+  cargaReduzidaSet,
 }: BarChartCardProps) {
   if (isLoading) return <Card title={title}><Spinner /></Card>
   if (isError) return <Card title={title}><ErrorAlert /></Card>
   if (!data?.length) return <Card title={title}><EmptyState /></Card>
 
   if (layout === 'horizontal') {
-    return <HorizontalBars title={title} data={data} onClick={onClick} />
+    return <HorizontalBars title={title} data={data} onClick={onClick} cargaReduzidaSet={cargaReduzidaSet} />
   }
 
   return <VerticalBars title={title} data={data} onClick={onClick} />
 }
 
-/** Barras horizontais com nomes completos — HTML/CSS puro. */
+/** Barras horizontais com nomes completos — HTML/CSS puro + expansão progressiva. */
 function HorizontalBars({
   title,
   data,
   onClick,
+  cargaReduzidaSet,
 }: {
   title: string
   data: GroupCount[]
   onClick?: (grupo: string) => void
+  cargaReduzidaSet?: Set<string>
 }) {
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE)
   const maxTotal = Math.max(...data.map((d) => d.total))
+  const visibleData = data.slice(0, visibleCount)
+  const hasMore = visibleCount < data.length
+  const remaining = data.length - visibleCount
+
+  function handleExpand() {
+    setVisibleCount((prev) => Math.min(prev + EXPAND_STEP, data.length))
+  }
+
+  function handleCollapse() {
+    setVisibleCount(INITIAL_VISIBLE)
+  }
 
   return (
     <Card title={title}>
       <div className="space-y-3">
-        {data.map((d, i) => (
+        {visibleData.map((d, i) => (
           <div
             key={d.grupo}
             className={onClick ? 'cursor-pointer group' : 'group'}
             onClick={() => onClick?.(d.grupo)}
           >
-            <div className="flex items-baseline justify-between gap-4 mb-1">
-              <span className="text-[13px] leading-tight text-gray-700 group-hover:text-gray-900 transition-colors">
+            <div className="flex items-baseline justify-between gap-2 mb-1 sm:gap-4">
+              <span className="min-w-0 break-words text-[13px] leading-tight text-gray-700 group-hover:text-gray-900 transition-colors">
                 {d.grupo}
+                {cargaReduzidaSet?.has(d.grupo) && (
+                  <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" title="Carga Reduzida">
+                    CR
+                  </span>
+                )}
               </span>
               <span className="text-[13px] font-semibold text-gray-900 shrink-0 tabular-nums">
                 {formatNumber(d.total)}
@@ -85,6 +110,30 @@ function HorizontalBars({
           </div>
         ))}
       </div>
+
+      {data.length > INITIAL_VISIBLE && (
+        <div className="mt-4 flex items-center justify-center gap-3 border-t border-gray-100 pt-3">
+          {hasMore && (
+            <button
+              onClick={handleExpand}
+              className="text-sm font-medium text-primary hover:text-primary-light transition-colors"
+            >
+              Ver mais {Math.min(EXPAND_STEP, remaining)} de {remaining} restantes
+            </button>
+          )}
+          {visibleCount > INITIAL_VISIBLE && (
+            <>
+              {hasMore && <span className="text-gray-300">|</span>}
+              <button
+                onClick={handleCollapse}
+                className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                Recolher
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </Card>
   )
 }

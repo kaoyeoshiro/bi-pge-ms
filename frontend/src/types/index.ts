@@ -58,7 +58,7 @@ export interface PaginationParams {
 }
 
 export interface GlobalFilters {
-  ano?: number | null
+  anos?: number[]
   mes?: number | null
   data_inicio?: string | null
   data_fim?: string | null
@@ -68,12 +68,26 @@ export interface GlobalFilters {
   area?: string[]
 }
 
+// --- Médias Chefia ---
+
+export interface ChefiaMediaKPI {
+  label: string
+  total: number
+  media: number
+}
+
+export interface ChefiaMediasResponse {
+  kpis: ChefiaMediaKPI[]
+  timeline: TimelineSeries[]
+  units_count: number
+  unit_label: string
+}
+
 // --- Comparativo Procuradores ---
 
 export interface ProcuradorComparativo {
   procurador: string
   processos_novos: number
-  pecas_elaboradas: number
   pecas_finalizadas: number
   pendencias: number
   total: number
@@ -84,6 +98,7 @@ export interface ProcuradorComparativo {
 export interface UserRoleItem {
   name: string
   role: 'procurador' | 'assessor'
+  carga_reduzida: boolean
 }
 
 export interface UserRoleListResponse {
@@ -104,4 +119,9 @@ export interface TableStat {
 export interface PopulateResult {
   procuradores: number
   assessores: number
+}
+
+export interface ProcuradorLotacao {
+  procurador: string
+  chefias: string[]
 }

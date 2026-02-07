@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../client'
 import type { FilterOptions } from '../../types'
@@ -23,4 +24,23 @@ export function useAssessores() {
     },
     staleTime: 60 * 60 * 1000,
   })
+}
+
+/** Retorna Set de nomes com carga reduzida. */
+export function useCargaReduzida() {
+  const query = useQuery<string[]>({
+    queryKey: ['carga-reduzida'],
+    queryFn: async () => {
+      const { data } = await api.get('/filters/carga-reduzida')
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const crSet = useMemo(
+    () => new Set(query.data ?? []),
+    [query.data]
+  )
+
+  return { ...query, crSet }
 }

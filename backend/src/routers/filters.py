@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
 from src.domain.schemas import FilterOptions
+from src.services.admin_service import UserRoleService
+from src.services.cache import cached
 from src.services.filter_options_service import FilterOptionsService
 
 router = APIRouter(prefix="/api/filters", tags=["Filtros"])
@@ -26,3 +28,12 @@ async def get_assessores(
     """Retorna nomes de assessores (usuários que não são procuradores)."""
     service = FilterOptionsService(session)
     return await service.get_assessores()
+
+
+@router.get("/carga-reduzida", response_model=list[str])
+async def get_carga_reduzida(
+    session: AsyncSession = Depends(get_session),
+) -> list[str]:
+    """Retorna nomes de usuários com carga reduzida ativa."""
+    service = UserRoleService(session)
+    return await service.get_carga_reduzida_names()

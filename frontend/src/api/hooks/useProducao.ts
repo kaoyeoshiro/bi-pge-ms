@@ -25,7 +25,7 @@ export function useProducaoTimeline() {
   })
 }
 
-export function useProducaoPorGrupo(grupo: string, tipo = 'elaboradas', limit = 15) {
+export function useProducaoPorGrupo(grupo: string, tipo = 'elaboradas', limit = 500) {
   const params = useFilterParams()
   return useQuery<GroupCount[]>({
     queryKey: [`producao-por-${grupo}`, params, tipo, limit],

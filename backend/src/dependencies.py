@@ -11,7 +11,8 @@ from src.services.admin_service import AdminAuthService
 
 
 async def parse_global_filters(
-    ano: int | None = Query(None, description="Ano para filtrar"),
+    ano: int | None = Query(None, description="Ano único (retrocompat)"),
+    anos: list[int] = Query(default=[], description="Anos para filtrar (múltiplos)"),
     mes: int | None = Query(None, description="Mês para filtrar (1-12)"),
     data_inicio: date | None = Query(None, description="Data inicial (YYYY-MM-DD)"),
     data_fim: date | None = Query(None, description="Data final (YYYY-MM-DD)"),
@@ -21,9 +22,14 @@ async def parse_global_filters(
     area: list[str] = Query(default=[], description="Áreas para filtrar"),
     assessor: list[str] = Query(default=[], description="Assessores para filtrar"),
 ) -> GlobalFilters:
-    """Extrai filtros globais dos query params."""
+    """Extrai filtros globais dos query params.
+
+    Aceita tanto `ano` (singular, retrocompat) quanto `anos` (múltiplos).
+    Se ambos forem fornecidos, `anos` tem prioridade.
+    """
+    resolved_anos = anos if anos else ([ano] if ano else [])
     return GlobalFilters(
-        ano=ano,
+        anos=resolved_anos,
         mes=mes,
         data_inicio=data_inicio,
         data_fim=data_fim,

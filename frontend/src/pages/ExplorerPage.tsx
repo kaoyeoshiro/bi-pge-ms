@@ -38,15 +38,15 @@ export function ExplorerPage() {
     <>
       <TopBar title="Explorar Dados" />
       <FilterBar />
-      <div className="space-y-6 p-6">
-        <div className="flex items-center gap-3">
+      <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="text-sm font-medium text-gray-600">Tabela:</span>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {TABLES.map((t) => (
               <button
                 key={t.value}
                 onClick={() => handleTableChange(t.value)}
-                className={`rounded-lg px-4 py-2 text-sm transition-colors ${
+                className={`rounded-lg px-3 py-1.5 text-xs transition-colors sm:px-4 sm:py-2 sm:text-sm ${
                   selectedTable === t.value
                     ? 'bg-primary text-white font-medium'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -57,7 +57,7 @@ export function ExplorerPage() {
             ))}
           </div>
           {schema.data && (
-            <span className="ml-auto text-xs text-gray-500">
+            <span className="w-full text-xs text-gray-500 sm:ml-auto sm:w-auto">
               {schema.data.total_rows.toLocaleString('pt-BR')} registros totais
             </span>
           )}

@@ -8,7 +8,7 @@ from datetime import date
 class GlobalFilters:
     """Filtros globais compartilhados por todos os endpoints de agregação."""
 
-    ano: int | None = None
+    anos: list[int] = field(default_factory=list)
     mes: int | None = None
     data_inicio: date | None = None
     data_fim: date | None = None

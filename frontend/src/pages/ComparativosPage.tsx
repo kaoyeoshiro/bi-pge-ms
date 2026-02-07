@@ -4,7 +4,7 @@ import { FilterBar } from '../components/filters/FilterBar'
 import { Card } from '../components/ui/Card'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
-import { useFilterOptions } from '../api/hooks/useFilters'
+import { useCargaReduzida, useFilterOptions } from '../api/hooks/useFilters'
 import { useCompararChefias, useCompararProcuradores, useCompararPeriodos } from '../api/hooks/useComparativos'
 import { SelectFilter } from '../components/filters/SelectFilter'
 import { formatNumber } from '../utils/formatters'
@@ -21,6 +21,7 @@ export function ComparativosPage() {
   const [p2Fim, setP2Fim] = useState('')
 
   const { data: options } = useFilterOptions()
+  const { crSet } = useCargaReduzida()
   const chefiasQuery = useCompararChefias(selectedChefias)
   const procsQuery = useCompararProcuradores(selectedProcs)
   const periodosQuery = useCompararPeriodos(p1Inicio, p1Fim, p2Inicio, p2Fim)
@@ -35,8 +36,8 @@ export function ComparativosPage() {
     <>
       <TopBar title="Comparativos" />
       <FilterBar />
-      <div className="space-y-6 p-6">
-        <div className="flex gap-1">
+      <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
+        <div className="flex flex-wrap gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -85,7 +86,7 @@ export function ComparativosPage() {
               )}
             </div>
             {procsQuery.isLoading && <Spinner />}
-            {procsQuery.data && <ComparisonTable data={procsQuery.data} labelKey="procurador" />}
+            {procsQuery.data && <ComparisonTable data={procsQuery.data} labelKey="procurador" cargaReduzidaSet={crSet} />}
             {selectedProcs.length < 2 && <EmptyState message="Selecione ao menos 2 procuradores para comparar" />}
           </div>
         )}
@@ -93,19 +94,19 @@ export function ComparativosPage() {
         {activeTab === 'periodos' && (
           <div className="space-y-4">
             <Card title="Comparar Períodos">
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-gray-600">Período 1</p>
                   <div className="flex gap-2">
-                    <input type="date" value={p1Inicio} onChange={(e) => setP1Inicio(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-sm" />
-                    <input type="date" value={p1Fim} onChange={(e) => setP1Fim(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-sm" />
+                    <input type="date" value={p1Inicio} onChange={(e) => setP1Inicio(e.target.value)} className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm" />
+                    <input type="date" value={p1Fim} onChange={(e) => setP1Fim(e.target.value)} className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm" />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-gray-600">Período 2</p>
                   <div className="flex gap-2">
-                    <input type="date" value={p2Inicio} onChange={(e) => setP2Inicio(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-sm" />
-                    <input type="date" value={p2Fim} onChange={(e) => setP2Fim(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-sm" />
+                    <input type="date" value={p2Inicio} onChange={(e) => setP2Inicio(e.target.value)} className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm" />
+                    <input type="date" value={p2Fim} onChange={(e) => setP2Fim(e.target.value)} className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm" />
                   </div>
                 </div>
               </div>
@@ -113,7 +114,7 @@ export function ComparativosPage() {
             {periodosQuery.isLoading && <Spinner />}
             {periodosQuery.data && (
               <Card title="Resultado da Comparação">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
                   {['periodo_1', 'periodo_2'].map((key, idx) => {
                     const periodo = periodosQuery.data[key]
                     return (
@@ -140,7 +141,15 @@ export function ComparativosPage() {
   )
 }
 
-function ComparisonTable({ data, labelKey }: { data: Array<Record<string, unknown>>; labelKey: string }) {
+function ComparisonTable({
+  data,
+  labelKey,
+  cargaReduzidaSet,
+}: {
+  data: Array<Record<string, unknown>>
+  labelKey: string
+  cargaReduzidaSet?: Set<string>
+}) {
   return (
     <Card>
       <div className="overflow-x-auto">
@@ -151,7 +160,6 @@ function ComparisonTable({ data, labelKey }: { data: Array<Record<string, unknow
                 {labelKey === 'chefia' ? 'Chefia' : 'Procurador'}
               </th>
               <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Processos Novos</th>
-              <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Peças Elaboradas</th>
               <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Peças Finalizadas</th>
               <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Pendências</th>
             </tr>
@@ -159,9 +167,17 @@ function ComparisonTable({ data, labelKey }: { data: Array<Record<string, unknow
           <tbody className="divide-y divide-gray-50">
             {data.map((row) => {
               const metricas = row.metricas as Array<{ label: string; valor: number }>
+              const label = row[labelKey] as string
               return (
-                <tr key={row[labelKey] as string} className="hover:bg-gray-50/50">
-                  <td className="px-4 py-2 font-medium text-gray-700">{row[labelKey] as string}</td>
+                <tr key={label} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-2 font-medium text-gray-700">
+                    {label}
+                    {cargaReduzidaSet?.has(label) && (
+                      <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" title="Carga Reduzida">
+                        CR
+                      </span>
+                    )}
+                  </td>
                   {metricas.map((m) => (
                     <td key={m.label} className="px-4 py-2 text-right">{formatNumber(m.valor)}</td>
                   ))}

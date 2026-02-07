@@ -1,10 +1,14 @@
 """Serviço para análise individualizada de procurador ou chefia."""
 
+import logging
 from collections import defaultdict
 from dataclasses import asdict
+from datetime import date
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from src.domain.filters import GlobalFilters, PaginationParams
 from src.domain.models import (
@@ -13,17 +17,37 @@ from src.domain.models import (
     Pendencia,
     ProcessoNovo,
     TABLE_MODEL_MAP,
+    UserRole,
 )
 from src.domain.schemas import (
+    ChefiaMediaKPI,
+    ChefiaMediasResponse,
     GroupCount,
     KPIValue,
     PaginatedResponse,
     ProcuradorComparativo,
+    TimelinePoint,
     TimelineSeries,
 )
 from src.repositories.base_repository import BaseRepository
 from src.services.cache import cached
 from src.services.normalization import normalize_procurador_expr
+
+# Métricas de procurador (usadas em visão geral, chefia, perfil procurador)
+PROCURADOR_TABLES = ["processos_novos", "pecas_finalizadas", "pendencias"]
+
+# Métricas de assessor (usadas apenas em /perfil-assessor)
+ASSESSOR_TABLES = ["pecas_elaboradas"]
+
+# Coluna de atribuição de pessoa por tabela no comparativo.
+# `procurador` = dono do caso (para processos_novos e pendencias)
+# `usuario_finalizacao` = procurador que finalizou a peça (para pecas_finalizadas)
+# Nota: `procurador` em pecas_finalizadas é o dono do caso, não quem finalizou.
+COMPARATIVO_PERSON_COL: dict[str, str] = {
+    "processos_novos": "procurador",
+    "pecas_finalizadas": "usuario_finalizacao",
+    "pendencias": "procurador",
+}
 
 
 class PerfilService:
@@ -51,34 +75,47 @@ class PerfilService:
     async def get_kpis(
         self, dimensao: str, valor: str, filters: GlobalFilters
     ) -> list[KPIValue]:
-        """KPIs: totais nas 4 tabelas para o indivíduo selecionado."""
+        """KPIs para o indivíduo selecionado.
+
+        Procurador/Chefia: processos_novos, pecas_finalizadas, pendencias.
+        Assessor: inclui também pecas_elaboradas (sua métrica de produção).
+        """
         f = self._build_filters(dimensao, valor, filters)
 
         processos = await self.repos["processos_novos"].total_count(f)
-        elaboradas = await self.repos["pecas_elaboradas"].total_count(f)
         finalizadas = await self.repos["pecas_finalizadas"].total_count(f)
         pendencias = await self.repos["pendencias"].total_count(f)
 
-        return [
+        kpis = [
             KPIValue(label="Processos Novos", valor=processos),
-            KPIValue(label="Peças Elaboradas", valor=elaboradas),
             KPIValue(label="Peças Finalizadas", valor=finalizadas),
             KPIValue(label="Pendências", valor=pendencias),
         ]
+
+        if dimensao == "assessor":
+            elaboradas = await self.repos["pecas_elaboradas"].total_count(f)
+            kpis.insert(1, KPIValue(label="Peças Elaboradas", valor=elaboradas))
+
+        return kpis
 
     @cached(ttl=300)
     async def get_timeline(
         self, dimensao: str, valor: str, filters: GlobalFilters
     ) -> list[TimelineSeries]:
-        """Séries temporais mensais nas 4 tabelas."""
+        """Séries temporais mensais.
+
+        Procurador/Chefia: 3 séries (sem pecas_elaboradas).
+        Assessor: inclui pecas_elaboradas.
+        """
         f = self._build_filters(dimensao, valor, filters)
 
-        labels = {
+        labels: dict[str, str] = {
             "processos_novos": "Processos Novos",
-            "pecas_elaboradas": "Peças Elaboradas",
             "pecas_finalizadas": "Peças Finalizadas",
             "pendencias": "Pendências",
         }
+        if dimensao == "assessor":
+            labels["pecas_elaboradas"] = "Peças Elaboradas"
 
         series = []
         for table_name, label in labels.items():
@@ -146,16 +183,18 @@ class PerfilService:
     async def get_comparativo_procuradores(
         self, chefia: str, filters: GlobalFilters
     ) -> list[ProcuradorComparativo]:
-        """Comparativo de métricas entre procuradores de uma chefia.
+        """Comparativo de métricas de procurador dentro de uma chefia.
 
-        Executa 4 queries (uma por tabela), agrupando por procurador,
-        e mescla os resultados num único ranking.
+        Agrupa cada tabela pela coluna de atribuição correta:
+        - processos_novos / pendencias → `procurador` (dono do caso)
+        - pecas_finalizadas → `usuario_finalizacao` (quem finalizou)
+
+        Peças elaboradas é métrica de assessor e não aparece aqui.
         """
         f = self._build_filters("chefia", chefia, filters)
         totais: dict[str, dict[str, int]] = defaultdict(
             lambda: {
                 "processos_novos": 0,
-                "pecas_elaboradas": 0,
                 "pecas_finalizadas": 0,
                 "pendencias": 0,
             }
@@ -163,29 +202,54 @@ class PerfilService:
 
         table_models = {
             "processos_novos": ProcessoNovo,
-            "pecas_elaboradas": PecaElaborada,
             "pecas_finalizadas": PecaFinalizada,
             "pendencias": Pendencia,
         }
 
+        logger.info(
+            "Comparativo procuradores: chefia=%s, filtros=%s",
+            chefia, f,
+        )
+
+        # Subquery: apenas nomes classificados como procurador
+        proc_names_sq = (
+            select(UserRole.name)
+            .where(UserRole.role == "procurador")
+            .scalar_subquery()
+        )
+
         for table_name, model in table_models.items():
             repo = self.repos[table_name]
-            proc_expr = normalize_procurador_expr(model.procurador)
+
+            # Usa a coluna de atribuição correta por tabela
+            person_col_name = COMPARATIVO_PERSON_COL[table_name]
+            raw_col = getattr(model, person_col_name)
+            person_expr = normalize_procurador_expr(raw_col)
 
             stmt = (
-                select(proc_expr.label("procurador"), func.count().label("total"))
+                select(
+                    person_expr.label("procurador"),
+                    func.count().label("total"),
+                )
                 .select_from(model)
-                .where(model.procurador.isnot(None))
-                .where(model.procurador != "")
-                .group_by(proc_expr)
+                .where(raw_col.isnot(None))
+                .where(raw_col != "")
+                .where(raw_col.in_(proc_names_sq))
+                .group_by(person_expr)
             )
             stmt = repo._apply_global_filters(stmt, f)
 
             result = await self.session.execute(stmt)
-            for row in result.all():
+            rows = result.all()
+
+            logger.info(
+                "  %s (col=%s): %d procuradores encontrados",
+                table_name, person_col_name, len(rows),
+            )
+
+            for row in rows:
                 totais[row.procurador][table_name] = row.total
 
-        # Montar lista ordenada por total decrescente
         comparativo = []
         for proc, metricas in totais.items():
             total = sum(metricas.values())
@@ -198,4 +262,184 @@ class PerfilService:
             )
 
         comparativo.sort(key=lambda x: x.total, reverse=True)
+
+        logger.info(
+            "Comparativo finalizado: %d procuradores, top 3: %s",
+            len(comparativo),
+            [(c.procurador, c.total) for c in comparativo[:3]],
+        )
+
         return comparativo
+
+    # --- Helpers para médias de chefia ---
+
+    @staticmethod
+    def resolve_date_range(filters: GlobalFilters) -> tuple[date, date]:
+        """Resolve o intervalo de datas a partir dos filtros globais.
+
+        Prioridade: data_inicio/data_fim > anos+mes > anos > fallback (ano corrente).
+        """
+        today = date.today()
+
+        if filters.data_inicio and filters.data_fim:
+            return filters.data_inicio, filters.data_fim
+
+        if filters.anos:
+            min_year = min(filters.anos)
+            max_year = max(filters.anos)
+
+            if filters.mes:
+                import calendar
+                _, last_day = calendar.monthrange(max_year, filters.mes)
+                return date(min_year, filters.mes, 1), date(max_year, filters.mes, last_day)
+
+            return date(min_year, 1, 1), date(max_year, 12, 31)
+
+        return date(today.year, 1, 1), today
+
+    @staticmethod
+    def compute_units_count(
+        start: date, end: date, unit: str
+    ) -> tuple[int, str]:
+        """Calcula número de unidades temporais no intervalo.
+
+        Retorna (contagem, rótulo). Mínimo de 1 para evitar divisão por zero.
+        """
+        if unit == "day":
+            count = (end - start).days + 1
+            label = "dias"
+        elif unit == "month":
+            count = (end.year - start.year) * 12 + (end.month - start.month) + 1
+            label = "meses"
+        elif unit == "year":
+            count = end.year - start.year + 1
+            label = "anos"
+        else:
+            count = 1
+            label = unit
+
+        return max(1, count), label
+
+    async def _count_filtered_by_persons(
+        self,
+        table_name: str,
+        filters: GlobalFilters,
+        person_names: list[str],
+    ) -> int:
+        """Conta registros filtrados por lista de procuradores.
+
+        Usa a coluna de atribuição correta (COMPARATIVO_PERSON_COL).
+        """
+        model = TABLE_MODEL_MAP[table_name]
+        repo = self.repos[table_name]
+
+        person_col_name = COMPARATIVO_PERSON_COL[table_name]
+        raw_col = getattr(model, person_col_name)
+        person_expr = normalize_procurador_expr(raw_col)
+
+        stmt = (
+            select(func.count())
+            .select_from(model)
+            .where(raw_col.isnot(None))
+            .where(person_expr.in_(person_names))
+        )
+        stmt = repo._apply_global_filters(stmt, filters)
+
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
+    async def _timeline_filtered_by_persons(
+        self,
+        table_name: str,
+        filters: GlobalFilters,
+        person_names: list[str],
+    ) -> list[TimelinePoint]:
+        """Timeline mensal filtrada por lista de procuradores."""
+        model = TABLE_MODEL_MAP[table_name]
+        repo = self.repos[table_name]
+
+        person_col_name = COMPARATIVO_PERSON_COL[table_name]
+        raw_col = getattr(model, person_col_name)
+        person_expr = normalize_procurador_expr(raw_col)
+
+        date_col = repo._get_date_column()
+        period_expr = func.to_char(date_col, "YYYY-MM")
+
+        stmt = (
+            select(period_expr.label("periodo"), func.count().label("total"))
+            .select_from(model)
+            .where(date_col.isnot(None))
+            .where(raw_col.isnot(None))
+            .where(person_expr.in_(person_names))
+            .group_by(period_expr)
+            .order_by(period_expr)
+        )
+        stmt = repo._apply_global_filters(stmt, filters)
+
+        result = await self.session.execute(stmt)
+        return [
+            TimelinePoint(periodo=row.periodo, valor=row.total)
+            for row in result.all()
+        ]
+
+    @cached(ttl=300)
+    async def get_chefia_medias(
+        self,
+        chefia: str,
+        filters: GlobalFilters,
+        average_unit: str = "month",
+        procurador_nomes: list[str] | None = None,
+    ) -> ChefiaMediasResponse:
+        """KPIs com média por unidade temporal para visão de chefia.
+
+        Permite filtrar por procuradores específicos.
+        Retorna totais, médias e timeline filtrada.
+        """
+        f = self._build_filters("chefia", chefia, filters)
+
+        labels: dict[str, str] = {
+            "processos_novos": "Processos Novos",
+            "pecas_finalizadas": "Peças Finalizadas",
+            "pendencias": "Pendências",
+        }
+
+        use_person_filter = bool(procurador_nomes)
+
+        # Coleta totais e timelines
+        totals: dict[str, int] = {}
+        timelines: dict[str, list[TimelinePoint]] = {}
+
+        for table_name, label in labels.items():
+            if use_person_filter:
+                totals[table_name] = await self._count_filtered_by_persons(
+                    table_name, f, procurador_nomes
+                )
+                timelines[table_name] = await self._timeline_filtered_by_persons(
+                    table_name, f, procurador_nomes
+                )
+            else:
+                totals[table_name] = await self.repos[table_name].total_count(f)
+                timelines[table_name] = await self.repos[table_name].count_by_period(f)
+
+        # Calcula médias
+        start, end = self.resolve_date_range(filters)
+        units, unit_label = self.compute_units_count(start, end, average_unit)
+
+        kpis = []
+        for table_name, label in labels.items():
+            total = totals[table_name]
+            media = round(total / units, 2)
+            kpis.append(ChefiaMediaKPI(label=label, total=total, media=media))
+
+        # Monta séries de timeline
+        timeline = [
+            TimelineSeries(nome=label, dados=timelines[table_name])
+            for table_name, label in labels.items()
+        ]
+
+        return ChefiaMediasResponse(
+            kpis=kpis,
+            timeline=timeline,
+            units_count=units,
+            unit_label=unit_label,
+        )

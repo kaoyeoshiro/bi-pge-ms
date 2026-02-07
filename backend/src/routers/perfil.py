@@ -7,6 +7,7 @@ from src.database import get_session
 from src.dependencies import parse_global_filters, parse_pagination
 from src.domain.filters import GlobalFilters, PaginationParams
 from src.domain.schemas import (
+    ChefiaMediasResponse,
     GroupCount,
     KPIValue,
     PaginatedResponse,
@@ -96,6 +97,24 @@ async def get_comparativo_procuradores(
     """Comparativo entre procuradores de uma chefia em todas as tabelas."""
     service = PerfilService(session)
     return await service.get_comparativo_procuradores(valor, filters)
+
+
+@router.get("/chefia-medias", response_model=ChefiaMediasResponse)
+async def get_chefia_medias(
+    valor: str = Query(..., min_length=1),
+    average_unit: str = Query("month", pattern=r"^(day|month|year)$"),
+    procurador_nomes: list[str] = Query(default=[]),
+    filters: GlobalFilters = Depends(parse_global_filters),
+    session: AsyncSession = Depends(get_session),
+) -> ChefiaMediasResponse:
+    """KPIs com média por unidade temporal para uma chefia."""
+    service = PerfilService(session)
+    return await service.get_chefia_medias(
+        chefia=valor,
+        filters=filters,
+        average_unit=average_unit,
+        procurador_nomes=procurador_nomes if procurador_nomes else None,
+    )
 
 
 @router.get("/lista", response_model=PaginatedResponse)

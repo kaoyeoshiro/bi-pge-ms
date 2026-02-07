@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Gerencia o ciclo de vida da aplicação."""
     logger.info("BI PGE-MS iniciando...")
-    # Criar tabela user_roles se não existir
+    # Criar/migrar tabelas auxiliares
     async with engine.begin() as conn:
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_roles (
@@ -50,7 +50,22 @@ async def lifespan(app: FastAPI):
                 updated_at TIMESTAMP DEFAULT NOW()
             )
         """))
-    logger.info("Tabela user_roles verificada.")
+        # Migração: coluna carga_reduzida em user_roles
+        await conn.execute(text("""
+            ALTER TABLE user_roles
+            ADD COLUMN IF NOT EXISTS carga_reduzida BOOLEAN DEFAULT FALSE
+        """))
+        # Tabela de lotação de procuradores em chefias
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS procurador_lotacoes (
+                id SERIAL PRIMARY KEY,
+                procurador VARCHAR(300) NOT NULL,
+                chefia VARCHAR(200) NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(procurador, chefia)
+            )
+        """))
+    logger.info("Tabelas user_roles e procurador_lotacoes verificadas.")
     yield
     await engine.dispose()
     logger.info("BI PGE-MS encerrado.")

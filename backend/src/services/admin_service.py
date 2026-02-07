@@ -17,9 +17,11 @@ from src.domain.models import (
     PecaFinalizada,
     Pendencia,
     ProcessoNovo,
+    ProcuradorLotacao,
     TABLE_MODEL_MAP,
     UserRole,
 )
+from src.services.normalization import normalize_chefia_expr
 from src.services.cache import clear_all_caches
 
 logger = logging.getLogger(__name__)
@@ -124,9 +126,45 @@ class UserRoleService:
             stmt = stmt.where(UserRole.role == role)
         result = await self.session.execute(stmt)
         return [
-            {"name": row.name, "role": row.role}
+            {
+                "name": row.name,
+                "role": row.role,
+                "carga_reduzida": row.carga_reduzida or False,
+            }
             for row in result.scalars().all()
         ]
+
+    async def update_carga_reduzida(self, name: str, carga_reduzida: bool) -> dict:
+        """Atualiza o flag de carga reduzida de um usuário."""
+        stmt = (
+            pg_insert(UserRole)
+            .values(
+                name=name,
+                role="procurador",
+                carga_reduzida=carga_reduzida,
+                updated_at=func.now(),
+            )
+            .on_conflict_do_update(
+                index_elements=[UserRole.name],
+                set_={"carga_reduzida": carga_reduzida, "updated_at": func.now()},
+            )
+            .returning(UserRole.name, UserRole.carga_reduzida)
+        )
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        row = result.one()
+        clear_all_caches()
+        return {"name": row.name, "carga_reduzida": row.carga_reduzida}
+
+    async def get_carga_reduzida_names(self) -> list[str]:
+        """Retorna nomes de usuários com carga reduzida ativa."""
+        stmt = (
+            select(UserRole.name)
+            .where(UserRole.carga_reduzida.is_(True))
+            .order_by(UserRole.name)
+        )
+        result = await self.session.execute(stmt)
+        return [row[0] for row in result.all()]
 
     async def update_role(self, name: str, role: str) -> dict:
         """Atualiza ou insere o role de um usuário."""
@@ -219,7 +257,7 @@ class UserRoleService:
         for name in sorted(proc_names):
             await self.session.execute(
                 pg_insert(UserRole)
-                .values(name=name, role="procurador")
+                .values(name=name, role="procurador", carga_reduzida=False)
                 .on_conflict_do_nothing()
             )
             inserted_proc += 1
@@ -227,7 +265,7 @@ class UserRoleService:
         for name in sorted(only_assessores):
             await self.session.execute(
                 pg_insert(UserRole)
-                .values(name=name, role="assessor")
+                .values(name=name, role="assessor", carga_reduzida=False)
                 .on_conflict_do_nothing()
             )
             inserted_assessor += 1
@@ -249,6 +287,71 @@ class UserRoleService:
         for role, total in result.all():
             counts[role] = total
         return counts
+
+
+class LotacaoService:
+    """Gerencia lotação de procuradores em chefias."""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def get_all_lotacoes(
+        self, search: str | None = None
+    ) -> list[dict]:
+        """Retorna lotações agrupadas por procurador."""
+        stmt = select(ProcuradorLotacao).order_by(
+            ProcuradorLotacao.procurador, ProcuradorLotacao.chefia
+        )
+        if search:
+            stmt = stmt.where(ProcuradorLotacao.procurador.ilike(f"%{search}%"))
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+
+        # Agrupar por procurador
+        agrupado: dict[str, list[str]] = {}
+        for row in rows:
+            agrupado.setdefault(row.procurador, []).append(row.chefia)
+
+        return [
+            {"procurador": proc, "chefias": chefias}
+            for proc, chefias in sorted(agrupado.items())
+        ]
+
+    async def set_lotacoes(self, procurador: str, chefias: list[str]) -> dict:
+        """Define as chefias de um procurador (substitui todas as anteriores)."""
+        # Remover lotações existentes
+        await self.session.execute(
+            delete(ProcuradorLotacao).where(
+                ProcuradorLotacao.procurador == procurador
+            )
+        )
+
+        # Inserir novas
+        for chefia in chefias:
+            await self.session.execute(
+                pg_insert(ProcuradorLotacao)
+                .values(procurador=procurador, chefia=chefia)
+                .on_conflict_do_nothing()
+            )
+
+        await self.session.commit()
+        return {"procurador": procurador, "chefias": chefias}
+
+    async def get_chefias_disponiveis(self) -> list[str]:
+        """Retorna chefias distintas normalizadas (PS unificada) das 4 tabelas."""
+        all_chefias: set[str] = set()
+
+        for model in [ProcessoNovo, PecaElaborada, PecaFinalizada, Pendencia]:
+            normalized = normalize_chefia_expr(model.chefia)
+            stmt = (
+                select(distinct(normalized))
+                .where(model.chefia.isnot(None))
+                .where(model.chefia != "")
+            )
+            result = await self.session.execute(stmt)
+            all_chefias.update(str(row[0]) for row in result.all())
+
+        return sorted(all_chefias)
 
 
 class ExcelImportService:

@@ -35,7 +35,7 @@ async def get_timeline(
 @router.get("/por-area", response_model=list[GroupCount])
 async def get_por_area(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(15, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
     """Ranking por área jurídica."""
@@ -56,7 +56,7 @@ async def get_por_tipo(
 @router.get("/por-categoria", response_model=list[GroupCount])
 async def get_por_categoria(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(15, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
     """Ranking por categoria."""
@@ -67,7 +67,7 @@ async def get_por_categoria(
 @router.get("/por-chefia", response_model=list[GroupCount])
 async def get_por_chefia(
     filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(15, ge=1, le=50),
+    limit: int = Query(500, ge=1, le=1000),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
     """Ranking por chefia."""

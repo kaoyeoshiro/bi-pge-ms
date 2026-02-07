@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import api, { buildQueryString } from '../client'
 import { useFilterParams } from './useFilterParams'
 import type {
+  ChefiaMediasResponse,
   GroupCount,
   KPIValue,
   PaginatedResponse,
@@ -156,5 +157,30 @@ export function usePerfilLista(
       return data
     },
     enabled: !!valor,
+  })
+}
+
+/** KPIs com média por unidade temporal para chefia. */
+export function useChefiaMedias(
+  valor: string | null,
+  averageUnit: string,
+  procuradorNomes: string[],
+  enabled: boolean = true,
+) {
+  const params = useFilterParams()
+  return useQuery<ChefiaMediasResponse>({
+    queryKey: ['chefia-medias', valor, averageUnit, procuradorNomes, params],
+    queryFn: async () => {
+      const { data } = await api.get(
+        `/perfil/chefia-medias${buildQueryString({
+          ...params,
+          valor: valor!,
+          average_unit: averageUnit,
+          procurador_nomes: procuradorNomes,
+        })}`
+      )
+      return data
+    },
+    enabled: !!valor && enabled,
   })
 }

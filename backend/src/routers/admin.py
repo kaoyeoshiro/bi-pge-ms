@@ -11,6 +11,7 @@ from src.dependencies import verify_admin
 from src.services.admin_service import (
     AdminAuthService,
     ExcelImportService,
+    LotacaoService,
     TableStatsService,
     UserRoleService,
 )
@@ -46,6 +47,16 @@ class UserRoleItem(BaseModel):
 class BulkRoleUpdateRequest(BaseModel):
     """Corpo da requisição de atualização em lote."""
     users: list[UserRoleItem]
+
+
+class CargaReduzidaRequest(BaseModel):
+    """Corpo da requisição de toggle carga reduzida."""
+    carga_reduzida: bool
+
+
+class LotacaoUpdateRequest(BaseModel):
+    """Corpo da requisição de atualização de lotação."""
+    chefias: list[str]
 
 
 # --- Endpoints ---
@@ -108,6 +119,51 @@ async def update_user_roles_bulk(
         [u.model_dump() for u in body.users]
     )
     return {"atualizados": count}
+
+
+@router.put("/users/{name}/carga-reduzida")
+async def update_carga_reduzida(
+    name: str,
+    body: CargaReduzidaRequest,
+    session: AsyncSession = Depends(get_session),
+    _: bool = Depends(verify_admin),
+):
+    """Atualiza flag de carga reduzida de um usuário."""
+    service = UserRoleService(session)
+    return await service.update_carga_reduzida(name, body.carga_reduzida)
+
+
+@router.get("/lotacoes")
+async def list_lotacoes(
+    search: str | None = None,
+    session: AsyncSession = Depends(get_session),
+    _: bool = Depends(verify_admin),
+):
+    """Lista lotações agrupadas por procurador."""
+    service = LotacaoService(session)
+    return await service.get_all_lotacoes(search)
+
+
+@router.put("/lotacoes/{name}")
+async def update_lotacao(
+    name: str,
+    body: LotacaoUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    _: bool = Depends(verify_admin),
+):
+    """Define as chefias de um procurador."""
+    service = LotacaoService(session)
+    return await service.set_lotacoes(name, body.chefias)
+
+
+@router.get("/chefias-disponiveis")
+async def list_chefias_disponiveis(
+    session: AsyncSession = Depends(get_session),
+    _: bool = Depends(verify_admin),
+):
+    """Lista chefias distintas normalizadas disponíveis."""
+    service = LotacaoService(session)
+    return await service.get_chefias_disponiveis()
 
 
 @router.post("/populate-roles")

@@ -43,7 +43,7 @@ class DashboardService:
         self,
         filters: GlobalFilters,
         limit: int = 10,
-        metrica: str = "pecas_elaboradas",
+        metrica: str = "pecas_finalizadas",
     ) -> list[GroupCount]:
         """Retorna top N chefias pela métrica selecionada."""
         repo = self._get_repo_for_metrica(metrica)
@@ -54,7 +54,7 @@ class DashboardService:
         self,
         filters: GlobalFilters,
         limit: int = 10,
-        metrica: str = "pecas_elaboradas",
+        metrica: str = "pecas_finalizadas",
     ) -> list[GroupCount]:
         """Retorna top N procuradores pela métrica selecionada."""
         repo = self._get_repo_for_metrica(metrica)

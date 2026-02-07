@@ -9,7 +9,8 @@ import { Card } from '../components/ui/Card'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorAlert } from '../components/ui/ErrorAlert'
-import { useFilterOptions } from '../api/hooks/useFilters'
+import { SelectFilter } from '../components/filters/SelectFilter'
+import { useCargaReduzida, useFilterOptions } from '../api/hooks/useFilters'
 import {
   usePerfilKPIs,
   usePerfilTimeline,
@@ -18,11 +19,20 @@ import {
   usePerfilPorProcurador,
   usePerfilLista,
   useComparativoProcuradores,
+  useChefiaMedias,
 } from '../api/hooks/usePerfil'
-import { formatNumber } from '../utils/formatters'
+import { formatNumber, formatDecimal } from '../utils/formatters'
 import type { PaginationParams, ProcuradorComparativo } from '../types'
 
-const TABELA_OPTIONS = [
+/** Opções de tabela para detalhamento — procurador/chefia. */
+const TABELA_OPTIONS_PROCURADOR = [
+  { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
+  { value: 'processos_novos', label: 'Processos Novos' },
+  { value: 'pendencias', label: 'Pendências' },
+] as const
+
+/** Opções de tabela para detalhamento — assessor (inclui elaboradas). */
+const TABELA_OPTIONS_ASSESSOR = [
   { value: 'pecas_elaboradas', label: 'Peças Elaboradas' },
   { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
   { value: 'processos_novos', label: 'Processos Novos' },
@@ -73,10 +83,9 @@ const TABLE_COLUMNS: Record<string, { key: string; label: string; type?: string 
 
 // --- Comparativo entre Procuradores ---
 
-type SortKey = keyof Pick<ProcuradorComparativo, 'procurador' | 'pecas_elaboradas' | 'pecas_finalizadas' | 'processos_novos' | 'pendencias' | 'total'>
+type SortKey = keyof Pick<ProcuradorComparativo, 'procurador' | 'pecas_finalizadas' | 'processos_novos' | 'pendencias' | 'total'>
 
 const METRIC_COLS: { key: SortKey; label: string; short: string; color: string }[] = [
-  { key: 'pecas_elaboradas', label: 'Peças Elaboradas', short: 'Elab.', color: '#1B3A5C' },
   { key: 'pecas_finalizadas', label: 'Peças Finalizadas', short: 'Final.', color: '#2E7D32' },
   { key: 'processos_novos', label: 'Processos Novos', short: 'Proc.', color: '#D4A843' },
   { key: 'pendencias', label: 'Pendências', short: 'Pend.', color: '#C62828' },
@@ -87,10 +96,12 @@ function ComparativoProcuradoresCard({
   data,
   isLoading,
   isError,
+  cargaReduzidaSet,
 }: {
   data: ProcuradorComparativo[] | undefined
   isLoading: boolean
   isError: boolean
+  cargaReduzidaSet?: Set<string>
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('total')
   const [sortAsc, setSortAsc] = useState(false)
@@ -136,6 +147,7 @@ function ComparativoProcuradoresCard({
 
   return (
     <Card title={`Comparativo entre Procuradores (${sorted.length})`}>
+      <p className="text-xs text-gray-400 mb-3 -mt-1">Métricas de procurador: finalizadas, processos novos e pendências atribuídas ao responsável pelo caso</p>
       <div className="overflow-auto max-h-[50vh]">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-white z-10 border-b border-gray-200">
@@ -163,6 +175,11 @@ function ComparativoProcuradoresCard({
               <tr key={row.procurador} className="hover:bg-gray-50/60 transition-colors">
                 <td className="px-3 py-2 text-[13px] font-medium text-gray-800 max-w-[200px] truncate" title={row.procurador}>
                   {row.procurador}
+                  {cargaReduzidaSet?.has(row.procurador) && (
+                    <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700" title="Carga Reduzida">
+                      CR
+                    </span>
+                  )}
                 </td>
                 {METRIC_COLS.map((col) => {
                   const val = row[col.key] as number
@@ -207,13 +224,20 @@ interface PerfilPageProps {
 export function PerfilPage({ title, dimensao, placeholder, options: customOptions, showProcuradorChart, showComparativoProcuradores }: PerfilPageProps) {
   const [valor, setValor] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [tabela, setTabela] = useState('pecas_elaboradas')
+  const tabelaOptions = dimensao === 'assessor' ? TABELA_OPTIONS_ASSESSOR : TABELA_OPTIONS_PROCURADOR
+  const [tabela, setTabela] = useState(tabelaOptions[0].value)
   const [pagination, setPagination] = useState<PaginationParams>({
     page: 1,
     page_size: 25,
     sort_order: 'desc',
   })
 
+  // Estados para médias de chefia
+  const [displayMode, setDisplayMode] = useState<'total' | 'average'>('total')
+  const [averageUnit, setAverageUnit] = useState<'day' | 'month' | 'year'>('month')
+  const [selectedProcuradores, setSelectedProcuradores] = useState<string[]>([])
+
+  const { crSet } = useCargaReduzida()
   const filterOptions = useFilterOptions()
   const defaultOptions = dimensao === 'procurador'
     ? filterOptions.data?.procuradores ?? []
@@ -238,17 +262,32 @@ export function PerfilPage({ title, dimensao, placeholder, options: customOption
   const comparativo = useComparativoProcuradores(
     showComparativoProcuradores ? valor : null
   )
+
+  // Lista de procuradores derivada do comparativo (para filtro de médias)
+  const procuradorOptions = useMemo(() => {
+    if (!comparativo.data) return []
+    return comparativo.data.map((c) => c.procurador).sort()
+  }, [comparativo.data])
+
+  // Hook de médias de chefia
+  const chefiaMedias = useChefiaMedias(
+    dimensao === 'chefia' ? valor : null,
+    averageUnit,
+    selectedProcuradores,
+    displayMode === 'average',
+  )
+
   const lista = usePerfilLista(dimensao, valor, tabela, pagination)
 
-  const tabelaLabel = TABELA_OPTIONS.find((t) => t.value === tabela)?.label ?? tabela
+  const tabelaLabel = tabelaOptions.find((t) => t.value === tabela)?.label ?? tabela
 
   return (
     <>
       <TopBar title={title} />
       <FilterBar />
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
         {/* Seletor de indivíduo */}
-        <div className="rounded-xl bg-surface shadow-sm border border-gray-100 p-5">
+        <div className="rounded-xl bg-surface shadow-sm border border-gray-100 p-3 sm:p-5">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             {placeholder}
           </label>
@@ -294,7 +333,7 @@ export function PerfilPage({ title, dimensao, placeholder, options: customOption
         </div>
 
         {!valor && (
-          <div className="rounded-xl bg-gray-50 border border-dashed border-gray-300 p-12 text-center">
+          <div className="rounded-xl bg-gray-50 border border-dashed border-gray-300 p-6 text-center sm:p-12">
             <p className="text-gray-500 text-sm">
               Selecione {dimensao === 'procurador' ? 'um procurador' : dimensao === 'chefia' ? 'uma chefia' : 'um assessor'} acima para ver a análise completa.
             </p>
@@ -303,13 +342,111 @@ export function PerfilPage({ title, dimensao, placeholder, options: customOption
 
         {valor && (
           <>
-            <KPIGrid data={kpis.data} isLoading={kpis.isLoading} isError={kpis.isError} />
+            {/* Painel de controle: Totais vs Médias (apenas chefia) */}
+            {dimensao === 'chefia' && (
+              <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-3 py-2 sm:px-5 sm:py-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-semibold text-gray-700">Exibir como:</span>
+                  <button
+                    onClick={() => {
+                      setDisplayMode('total')
+                      setSelectedProcuradores([])
+                    }}
+                    className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
+                      displayMode === 'total'
+                        ? 'bg-primary text-white font-medium shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Totais
+                  </button>
+                  <button
+                    onClick={() => setDisplayMode('average')}
+                    className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
+                      displayMode === 'average'
+                        ? 'bg-primary text-white font-medium shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Médias
+                  </button>
 
+                  {displayMode === 'average' && (
+                    <>
+                      <span className="ml-2 text-sm text-gray-500">por:</span>
+                      {([['day', 'Dia'], ['month', 'Mês'], ['year', 'Ano']] as const).map(([unit, label]) => (
+                        <button
+                          key={unit}
+                          onClick={() => setAverageUnit(unit)}
+                          className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                            averageUnit === unit
+                              ? 'bg-blue-600 text-white font-medium shadow-sm'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      {procuradorOptions.length > 0 && (
+                        <div className="ml-2">
+                          <SelectFilter
+                            label="Procuradores"
+                            options={procuradorOptions}
+                            value={selectedProcuradores}
+                            onChange={setSelectedProcuradores}
+                            showSelectAll
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* KPIs: totais ou médias */}
+            {displayMode === 'average' && dimensao === 'chefia' ? (
+              chefiaMedias.isLoading ? (
+                <Spinner />
+              ) : chefiaMedias.isError ? (
+                <ErrorAlert />
+              ) : chefiaMedias.data ? (
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+                  {chefiaMedias.data.kpis.map((kpi) => (
+                    <div key={kpi.label} className="rounded-xl border border-gray-100 bg-surface p-3 shadow-sm sm:p-5">
+                      <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide sm:text-xs">{kpi.label}</p>
+                      <p className="mt-1 text-xl font-bold text-primary sm:mt-2 sm:text-2xl">
+                        {formatDecimal(kpi.media)}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        Total: {formatNumber(kpi.total)} em {chefiaMedias.data!.units_count} {chefiaMedias.data!.unit_label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null
+            ) : (
+              <KPIGrid data={kpis.data} isLoading={kpis.isLoading} isError={kpis.isError} />
+            )}
+
+            {/* Gráfico: timeline padrão ou filtrada */}
             <LineChartCard
               title="Evolução Mensal"
-              series={timeline.data}
-              isLoading={timeline.isLoading}
-              isError={timeline.isError}
+              series={
+                displayMode === 'average' && dimensao === 'chefia' && chefiaMedias.data
+                  ? chefiaMedias.data.timeline
+                  : timeline.data
+              }
+              isLoading={
+                displayMode === 'average' && dimensao === 'chefia'
+                  ? chefiaMedias.isLoading
+                  : timeline.isLoading
+              }
+              isError={
+                displayMode === 'average' && dimensao === 'chefia'
+                  ? chefiaMedias.isError
+                  : timeline.isError
+              }
             />
 
             {showComparativoProcuradores && (
@@ -317,14 +454,15 @@ export function PerfilPage({ title, dimensao, placeholder, options: customOption
                 data={comparativo.data}
                 isLoading={comparativo.isLoading}
                 isError={comparativo.isError}
+                cargaReduzidaSet={crSet}
               />
             )}
 
             {/* Seletor de tabela para detalhamento */}
-            <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-5 py-3">
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-3 py-2 sm:px-5 sm:py-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="text-sm font-semibold text-gray-700">Detalhar:</span>
-                {TABELA_OPTIONS.map((opt) => (
+                {tabelaOptions.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => {
@@ -367,6 +505,7 @@ export function PerfilPage({ title, dimensao, placeholder, options: customOption
                     data={procuradores.data}
                     isLoading={procuradores.isLoading}
                     isError={procuradores.isError}
+                    cargaReduzidaSet={crSet}
                   />
                 )}
               </div>

@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useSidebar } from './AppShell'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Visão Geral', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -14,8 +16,20 @@ const NAV_ITEMS = [
 ]
 
 export function Sidebar() {
+  const { isOpen, close } = useSidebar()
+  const location = useLocation()
+
+  // Fecha sidebar ao navegar no mobile
+  useEffect(() => {
+    close()
+  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <aside className="fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-gray-200 bg-gray-100">
+    <aside
+      className={`fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-gray-200 bg-gray-100 transition-transform duration-200 md:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}
+    >
       <div className="flex flex-col items-center px-4 pt-5 pb-4 border-b border-gray-200">
         <img
           src="/logo-pge.png"
@@ -27,7 +41,7 @@ export function Sidebar() {
         <p className="text-[10px] text-primary/60">Business Intelligence</p>
       </div>
 
-      <nav className="mt-2 flex-1 space-y-0.5 px-3">
+      <nav className="mt-2 flex-1 space-y-0.5 overflow-y-auto px-3">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.path}

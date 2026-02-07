@@ -9,13 +9,13 @@ export function FilterBar() {
   if (!options) return null
 
   return (
-    <div className="sticky top-14 z-10 flex flex-wrap items-center gap-3 border-b border-gray-200 bg-surface px-6 py-3">
+    <div className="sticky top-14 z-10 flex flex-wrap items-center gap-2 border-b border-gray-200 bg-surface px-3 py-2 sm:gap-3 sm:px-6 sm:py-3">
       <SelectFilter
         label="Ano"
         options={options.anos.map(String)}
-        value={store.ano ? [String(store.ano)] : []}
-        onChange={(v) => store.setAno(v.length ? Number(v[0]) : null)}
-        single
+        value={store.anos.map(String)}
+        onChange={(v) => store.setAnos(v.map(Number))}
+        showSelectAll
       />
       <SelectFilter
         label="Chefia"
@@ -42,12 +42,12 @@ export function FilterBar() {
         onChange={store.setAreas}
       />
 
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
         <input
           type="date"
           value={store.dataInicio ?? ''}
           onChange={(e) => store.setDataInicio(e.target.value || null)}
-          className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary focus:outline-none"
+          className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary focus:outline-none sm:flex-none"
           placeholder="Data início"
         />
         <span className="text-xs text-gray-400">a</span>
@@ -55,7 +55,7 @@ export function FilterBar() {
           type="date"
           value={store.dataFim ?? ''}
           onChange={(e) => store.setDataFim(e.target.value || null)}
-          className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary focus:outline-none"
+          className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary focus:outline-none sm:flex-none"
           placeholder="Data fim"
         />
       </div>

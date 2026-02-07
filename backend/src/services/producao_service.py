@@ -27,33 +27,29 @@ class ProducaoService:
 
     @cached(ttl=300)
     async def get_kpis(self, filters: GlobalFilters) -> list[KPIValue]:
-        """KPIs de produção: elaboradas, finalizadas, taxa, média/dia."""
-        total_elab = await self.elab_repo.total_count(filters)
+        """KPIs de produção: finalizadas e média/dia útil.
+
+        Peças elaboradas é métrica de assessor; não aparece aqui.
+        """
         total_final = await self.final_repo.total_count(filters)
 
-        taxa = round(total_final / total_elab * 100, 2) if total_elab > 0 else 0.0
-        # Estima média por dia útil (~22 dias/mês)
-        timeline = await self.elab_repo.count_by_period(filters)
+        timeline = await self.final_repo.count_by_period(filters)
         meses = len(timeline) if timeline else 1
-        media_dia = round(total_elab / (meses * 22), 2) if meses > 0 else 0.0
+        media_dia = round(total_final / (meses * 22), 2) if meses > 0 else 0.0
 
         return [
-            KPIValue(label="Peças Elaboradas", valor=total_elab),
             KPIValue(label="Peças Finalizadas", valor=total_final),
-            KPIValue(label="Taxa de Conclusão (%)", valor=taxa, formato="percentual"),
-            KPIValue(label="Média por Dia Útil", valor=media_dia, formato="decimal"),
+            KPIValue(label="Média Finalizadas/Dia Útil", valor=media_dia, formato="decimal"),
         ]
 
     @cached(ttl=300)
     async def get_timeline(
         self, filters: GlobalFilters
     ) -> list[TimelineSeries]:
-        """Séries temporais de elaboradas e finalizadas."""
-        elab_data = await self.elab_repo.count_by_period(filters)
+        """Séries temporais de peças finalizadas."""
         final_data = await self.final_repo.count_by_period(filters)
 
         return [
-            TimelineSeries(nome="Elaboradas", dados=elab_data),
             TimelineSeries(nome="Finalizadas", dados=final_data),
         ]
 

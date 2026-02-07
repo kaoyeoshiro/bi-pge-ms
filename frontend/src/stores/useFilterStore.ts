@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 interface FilterState {
-  ano: number | null
+  anos: number[]
   mes: number | null
   dataInicio: string | null
   dataFim: string | null
@@ -10,7 +10,7 @@ interface FilterState {
   categorias: string[]
   areas: string[]
 
-  setAno: (ano: number | null) => void
+  setAnos: (anos: number[]) => void
   setMes: (mes: number | null) => void
   setDataInicio: (data: string | null) => void
   setDataFim: (data: string | null) => void
@@ -23,7 +23,7 @@ interface FilterState {
 }
 
 const initialState = {
-  ano: null as number | null,
+  anos: [] as number[],
   mes: null as number | null,
   dataInicio: null as string | null,
   dataFim: null as string | null,
@@ -36,7 +36,7 @@ const initialState = {
 export const useFilterStore = create<FilterState>((set, get) => ({
   ...initialState,
 
-  setAno: (ano) => set({ ano }),
+  setAnos: (anos) => set({ anos }),
   setMes: (mes) => set({ mes }),
   setDataInicio: (dataInicio) => set({ dataInicio }),
   setDataFim: (dataFim) => set({ dataFim }),
@@ -51,7 +51,7 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     const state = get()
     const params: Record<string, string | string[]> = {}
 
-    if (state.ano) params.ano = String(state.ano)
+    if (state.anos.length) params.anos = state.anos.map(String)
     if (state.mes) params.mes = String(state.mes)
     if (state.dataInicio) params.data_inicio = state.dataInicio
     if (state.dataFim) params.data_fim = state.dataFim

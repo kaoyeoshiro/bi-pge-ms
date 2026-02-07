@@ -7,8 +7,10 @@ from sqlalchemy import Column, Select, func, literal, select, or_, String, cast,
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
+from src.domain.constants import CATEGORIAS_NAO_PRODUTIVAS
 from src.domain.enums import Granularity
 from src.domain.filters import GlobalFilters, PaginationParams
+from src.domain.models import PecaFinalizada, UserRole
 from src.domain.schemas import GroupCount, PaginatedResponse, TimelinePoint
 from src.services.normalization import normalize_chefia_expr, normalize_procurador_expr
 
@@ -18,6 +20,14 @@ ASSESSOR_COL_MAP: dict[str, str] = {
     "pecas_elaboradas": "usuario_criacao",
     "pecas_finalizadas": "usuario_finalizacao",
     "pendencias": "usuario_cumpridor_pendencia",
+}
+
+# Coluna real de "procurador" por tabela.
+# Em pecas_finalizadas, o campo `procurador` é o dono do caso, mas quem
+# realmente finalizou a peça é `usuario_finalizacao`. Para rankings por
+# procurador, usamos a coluna de atribuição correta.
+PROCURADOR_COL_MAP: dict[str, str] = {
+    "pecas_finalizadas": "usuario_finalizacao",
 }
 
 
@@ -40,8 +50,11 @@ class BaseRepository:
         """Aplica filtros globais condicionalmente ao statement."""
         date_col = self._get_date_column()
 
-        if filters.ano:
-            stmt = stmt.where(func.extract("year", date_col) == filters.ano)
+        if filters.anos:
+            if len(filters.anos) == 1:
+                stmt = stmt.where(func.extract("year", date_col) == filters.anos[0])
+            else:
+                stmt = stmt.where(func.extract("year", date_col).in_(filters.anos))
 
         if filters.mes:
             stmt = stmt.where(func.extract("month", date_col) == filters.mes)
@@ -55,11 +68,11 @@ class BaseRepository:
             stmt = stmt.where(date_col <= dt_fim)
 
         if filters.chefia:
-            chefia_expr = self._get_group_expr("chefia")
+            chefia_expr = self._get_filter_expr("chefia")
             stmt = stmt.where(chefia_expr.in_(filters.chefia))
 
         if filters.procurador:
-            proc_expr = self._get_group_expr("procurador")
+            proc_expr = self._get_filter_expr("procurador")
             stmt = stmt.where(proc_expr.in_(filters.procurador))
 
         if filters.categoria and hasattr(self.model, "categoria"):
@@ -77,6 +90,12 @@ class BaseRepository:
             else:
                 # Tabela sem coluna de assessor (ex: processos_novos) → 0 resultados
                 stmt = stmt.where(literal(False))
+
+        # Excluir categorias não-produtivas de pecas_finalizadas
+        if self.model is PecaFinalizada:
+            stmt = stmt.where(
+                PecaFinalizada.categoria.notin_(CATEGORIAS_NAO_PRODUTIVAS)
+            )
 
         return stmt
 
@@ -115,12 +134,50 @@ class BaseRepository:
             for row in result.all()
         ]
 
-    def _get_group_expr(self, group_column: str) -> Column:
-        """Retorna expressão de agrupamento com normalização quando necessário."""
-        col = getattr(self.model, group_column)
-        if group_column == "chefia":
-            return normalize_chefia_expr(col)
+    def _resolve_column(self, group_column: str) -> str:
+        """Resolve o nome real da coluna considerando mapeamentos por tabela.
+
+        Para 'procurador' em pecas_finalizadas, usa 'usuario_finalizacao'
+        (quem de fato finalizou a peça, não o dono do caso).
+        """
         if group_column == "procurador":
+            mapped = PROCURADOR_COL_MAP.get(self.model.__tablename__)
+            if mapped and hasattr(self.model, mapped):
+                return mapped
+        return group_column
+
+    def _procurador_names_subquery(self) -> Select:
+        """Subquery com nomes classificados como procurador em user_roles."""
+        return (
+            select(UserRole.name)
+            .where(UserRole.role == "procurador")
+            .scalar_subquery()
+        )
+
+    def _get_filter_expr(self, column_name: str) -> Column:
+        """Retorna expressão de filtro com normalização (sem resolução de coluna).
+
+        Usado em _apply_global_filters para filtrar pela coluna original
+        (ex: procurador = dono do caso), não pela coluna resolvida.
+        """
+        col = getattr(self.model, column_name)
+        if column_name in ("chefia",):
+            return normalize_chefia_expr(col)
+        if column_name in ("procurador",):
+            return normalize_procurador_expr(col)
+        return col
+
+    def _get_group_expr(self, group_column: str) -> Column:
+        """Retorna expressão de agrupamento com resolução e normalização.
+
+        Usado em count_by_group e distinct_values. Resolve a coluna real
+        (ex: procurador → usuario_finalizacao em pecas_finalizadas).
+        """
+        real_column = self._resolve_column(group_column)
+        col = getattr(self.model, real_column)
+        if group_column in ("chefia",):
+            return normalize_chefia_expr(col)
+        if group_column in ("procurador",):
             return normalize_procurador_expr(col)
         return col
 
@@ -133,7 +190,8 @@ class BaseRepository:
         """Conta registros agrupados por uma dimensão com normalização."""
         if not hasattr(self.model, group_column):
             return []
-        col = getattr(self.model, group_column)
+        real_column = self._resolve_column(group_column)
+        col = getattr(self.model, real_column)
         group_expr = self._get_group_expr(group_column)
 
         stmt = (
@@ -144,6 +202,11 @@ class BaseRepository:
             .order_by(func.count().desc())
             .limit(limit)
         )
+
+        # Filtrar por role de procurador quando agrupando por "procurador"
+        if group_column == "procurador":
+            stmt = stmt.where(col.in_(self._procurador_names_subquery()))
+
         stmt = self._apply_global_filters(stmt, filters)
 
         result = await self.session.execute(stmt)
@@ -224,7 +287,8 @@ class BaseRepository:
 
     async def distinct_values(self, column: str, limit: int = 500) -> list[str]:
         """Retorna valores distintos de uma coluna com normalização."""
-        col = getattr(self.model, column)
+        real_column = self._resolve_column(column)
+        col = getattr(self.model, real_column)
         group_expr = self._get_group_expr(column)
 
         stmt = (
@@ -234,5 +298,10 @@ class BaseRepository:
             .order_by(group_expr)
             .limit(limit)
         )
+
+        # Filtrar por role de procurador quando listando "procurador"
+        if column == "procurador":
+            stmt = stmt.where(col.in_(self._procurador_names_subquery()))
+
         result = await self.session.execute(stmt)
         return [str(row[0]) for row in result.all()]

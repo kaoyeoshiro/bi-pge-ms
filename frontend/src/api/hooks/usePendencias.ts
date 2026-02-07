@@ -25,7 +25,7 @@ export function usePendenciasTimeline() {
   })
 }
 
-export function usePendenciasPorGrupo(grupo: string, limit = 15) {
+export function usePendenciasPorGrupo(grupo: string, limit = 500) {
   const params = useFilterParams()
   return useQuery<GroupCount[]>({
     queryKey: [`pendencias-por-${grupo}`, params, limit],

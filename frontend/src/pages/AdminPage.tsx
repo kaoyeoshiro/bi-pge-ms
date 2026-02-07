@@ -2,13 +2,17 @@ import { useState, useMemo, useCallback } from 'react'
 import { TopBar } from '../components/layout/TopBar'
 import { useAdminStore } from '../stores/useAdminStore'
 import {
+  useAdminLotacoes,
   useAdminUsers,
+  useChefiaOptions,
   usePopulateRoles,
   useTableStats,
+  useUpdateCargaReduzida,
+  useUpdateLotacao,
   useUpdateUserRole,
   useUploadExcel,
 } from '../api/hooks/useAdmin'
-import type { TableStat } from '../types'
+import type { ProcuradorLotacao, TableStat } from '../types'
 
 const TABELA_OPTIONS = [
   { value: 'processos_novos', label: 'Processos Novos' },
@@ -89,6 +93,7 @@ function UsersTab() {
     roleFilter || undefined,
   )
   const updateRole = useUpdateUserRole()
+  const updateCR = useUpdateCargaReduzida()
   const populateRoles = usePopulateRoles()
 
   // Debounce simples
@@ -166,18 +171,19 @@ function UsersTab() {
             <tr>
               <th className="px-4 py-3">Nome</th>
               <th className="px-4 py-3 w-40">Classificação</th>
+              <th className="px-4 py-3 w-28 text-center">Carga Red.</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
               <tr>
-                <td colSpan={2} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
                   Carregando...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={2} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
                   {debouncedSearch
                     ? 'Nenhum usuário encontrado.'
                     : 'Tabela vazia. Clique em "Popular Tabela" para carregar.'}
@@ -205,6 +211,19 @@ function UsersTab() {
                       <option value="procurador">Procurador</option>
                       <option value="assessor">Assessor</option>
                     </select>
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={user.carga_reduzida}
+                      onChange={(e) =>
+                        updateCR.mutate({
+                          name: user.name,
+                          carga_reduzida: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-gray-300 text-amber-600 accent-amber-600"
+                    />
                   </td>
                 </tr>
               ))
@@ -422,12 +441,161 @@ function UploadTab() {
   )
 }
 
+// --- Tab Lotação de Procuradores ---
+
+function LotacaoTab() {
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editChefias, setEditChefias] = useState<string[]>([])
+
+  const { data: lotacoes, isLoading } = useAdminLotacoes(debouncedSearch || undefined)
+  const { data: chefiaOptions } = useChefiaOptions()
+  const updateLotacao = useUpdateLotacao()
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value)
+    const timer = setTimeout(() => setDebouncedSearch(value), 300)
+    return () => clearTimeout(timer)
+  }, [])
+
+  const handleStartEdit = (lotacao: ProcuradorLotacao) => {
+    setEditing(lotacao.procurador)
+    setEditChefias([...lotacao.chefias])
+  }
+
+  const handleSave = () => {
+    if (!editing) return
+    updateLotacao.mutate(
+      { name: editing, chefias: editChefias },
+      { onSuccess: () => setEditing(null) }
+    )
+  }
+
+  const handleToggleChefia = (chefia: string) => {
+    setEditChefias((prev) =>
+      prev.includes(chefia)
+        ? prev.filter((c) => c !== chefia)
+        : [...prev, chefia]
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => handleSearchChange(e.target.value)}
+        placeholder="Buscar procurador..."
+        className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+
+      {/* Modal de edição inline */}
+      {editing && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-blue-900">
+              Editando: {editing}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSave}
+                disabled={updateLotacao.isPending}
+                className="rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary-dark disabled:opacity-50"
+              >
+                {updateLotacao.isPending ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button
+                onClick={() => setEditing(null)}
+                className="rounded-lg border border-gray-300 px-4 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(chefiaOptions ?? []).map((chefia) => (
+              <button
+                key={chefia}
+                onClick={() => handleToggleChefia(chefia)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  editChefias.includes(chefia)
+                    ? 'bg-primary text-white'
+                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'
+                }`}
+              >
+                {chefia}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabela de lotações */}
+      <div className="max-h-[60vh] overflow-auto rounded-lg border border-gray-200">
+        <table className="w-full text-left text-sm">
+          <thead className="sticky top-0 bg-gray-50 text-xs uppercase text-gray-500">
+            <tr>
+              <th className="px-4 py-3">Procurador</th>
+              <th className="px-4 py-3">Chefias</th>
+              <th className="px-4 py-3 w-24">Ação</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {isLoading ? (
+              <tr>
+                <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
+                  Carregando...
+                </td>
+              </tr>
+            ) : !lotacoes?.length ? (
+              <tr>
+                <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
+                  {debouncedSearch
+                    ? 'Nenhum procurador encontrado.'
+                    : 'Nenhuma lotação cadastrada.'}
+                </td>
+              </tr>
+            ) : (
+              lotacoes.map((lot) => (
+                <tr key={lot.procurador} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 font-medium text-gray-900">{lot.procurador}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {lot.chefias.map((c) => (
+                        <span
+                          key={c}
+                          className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2">
+                    <button
+                      onClick={() => handleStartEdit(lot)}
+                      className="text-xs font-medium text-primary hover:text-primary-dark"
+                    >
+                      Editar
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // --- Página Principal Admin ---
 
 export function AdminPage() {
   const isAuthenticated = useAdminStore((s) => s.isAuthenticated)
   const logout = useAdminStore((s) => s.logout)
-  const [activeTab, setActiveTab] = useState<'users' | 'upload'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'lotacao' | 'upload'>('users')
 
   if (!isAuthenticated) {
     return <AdminLogin />
@@ -436,41 +604,53 @@ export function AdminPage() {
   return (
     <>
       <TopBar title="Painel Administrativo" />
-      <div className="p-6 space-y-4">
+      <div className="space-y-4 p-4 sm:p-6">
         {/* Header com tabs e botão sair */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
             <button
               onClick={() => setActiveTab('users')}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:py-2 sm:text-sm ${
                 activeTab === 'users'
                   ? 'bg-white text-primary shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Classificação de Usuários
+              Usuários
+            </button>
+            <button
+              onClick={() => setActiveTab('lotacao')}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:py-2 sm:text-sm ${
+                activeTab === 'lotacao'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Lotação
             </button>
             <button
               onClick={() => setActiveTab('upload')}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:py-2 sm:text-sm ${
                 activeTab === 'upload'
                   ? 'bg-white text-primary shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Atualização de Dados
+              Dados
             </button>
           </div>
           <button
             onClick={logout}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-50 sm:px-4 sm:py-2 sm:text-sm"
           >
             Sair
           </button>
         </div>
 
         {/* Conteúdo da tab */}
-        {activeTab === 'users' ? <UsersTab /> : <UploadTab />}
+        {activeTab === 'users' && <UsersTab />}
+        {activeTab === 'lotacao' && <LotacaoTab />}
+        {activeTab === 'upload' && <UploadTab />}
       </div>
     </>
   )
