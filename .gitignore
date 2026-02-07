@@ -53,7 +53,9 @@ coverage.xml
 
 # === Outros ===
 *.bak
+*.backup
 *.tmp
 *.log
 nul
+_check.py
 .playwright-mcp/
