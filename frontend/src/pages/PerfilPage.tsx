@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { TopBar } from '../components/layout/TopBar'
-import { FilterBar } from '../components/filters/FilterBar'
+import { PageFilterBar } from '../components/filters/PageFilterBar'
+import { FilterParamsProvider } from '../api/hooks/useFilterParams'
 import { KPIGrid } from '../components/data/KPIGrid'
 import { LineChartCard } from '../components/charts/LineChartCard'
 import { BarChartCard } from '../components/charts/BarChartCard'
@@ -21,6 +22,7 @@ import {
   useComparativoProcuradores,
   useChefiaMedias,
 } from '../api/hooks/usePerfil'
+import { usePageFilters } from '../hooks/usePageFilters'
 import { formatNumber, formatDecimal } from '../utils/formatters'
 import type { PaginationParams, ProcuradorComparativo } from '../types'
 
@@ -209,7 +211,7 @@ function ComparativoProcuradoresCard({
   )
 }
 
-interface PerfilPageProps {
+export interface PerfilPageProps {
   title: string
   dimensao: 'procurador' | 'chefia' | 'assessor'
   placeholder: string
@@ -221,7 +223,30 @@ interface PerfilPageProps {
   showComparativoProcuradores?: boolean
 }
 
-export function PerfilPage({ title, dimensao, placeholder, options: customOptions, showProcuradorChart, showComparativoProcuradores }: PerfilPageProps) {
+/**
+ * Wrapper que isola os filtros da página do store global.
+ * O FilterParamsProvider faz com que todos os hooks de API chamados
+ * dentro de PerfilPageContent usem os filtros locais (ano, data).
+ */
+export function PerfilPage(props: PerfilPageProps) {
+  const { params, ...filterBarProps } = usePageFilters()
+
+  return (
+    <>
+      <TopBar title={props.title} />
+      <PageFilterBar {...filterBarProps} />
+      <FilterParamsProvider value={params}>
+        <PerfilPageContent {...props} />
+      </FilterParamsProvider>
+    </>
+  )
+}
+
+/**
+ * Conteúdo interno da página de perfil.
+ * Todos os hooks de API aqui resolvem useFilterParams() via contexto local.
+ */
+function PerfilPageContent({ dimensao, placeholder, options: customOptions, showProcuradorChart, showComparativoProcuradores }: PerfilPageProps) {
   const [valor, setValor] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const tabelaOptions = dimensao === 'assessor' ? TABELA_OPTIONS_ASSESSOR : TABELA_OPTIONS_PROCURADOR
@@ -282,247 +307,243 @@ export function PerfilPage({ title, dimensao, placeholder, options: customOption
   const tabelaLabel = tabelaOptions.find((t) => t.value === tabela)?.label ?? tabela
 
   return (
-    <>
-      <TopBar title={title} />
-      <FilterBar />
-      <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
-        {/* Seletor de indivíduo */}
-        <div className="rounded-xl bg-surface shadow-sm border border-gray-100 p-3 sm:p-5">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            {placeholder}
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={valor ?? search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                if (valor) setValor(null)
-              }}
-              placeholder={`Digite para buscar...`}
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            {!valor && search && filtered.length > 0 && (
-              <ul className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                {filtered.map((opt) => (
-                  <li key={opt}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setValor(opt)
-                        setSearch('')
-                        setPagination((p) => ({ ...p, page: 1 }))
-                      }}
-                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
-                    >
-                      {opt}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          {valor && (
-            <button
-              onClick={() => { setValor(null); setSearch('') }}
-              className="mt-2 text-xs text-blue-600 hover:underline"
-            >
-              Limpar seleção
-            </button>
-          )}
-        </div>
-
-        {!valor && (
-          <div className="rounded-xl bg-gray-50 border border-dashed border-gray-300 p-6 text-center sm:p-12">
-            <p className="text-gray-500 text-sm">
-              Selecione {dimensao === 'procurador' ? 'um procurador' : dimensao === 'chefia' ? 'uma chefia' : 'um assessor'} acima para ver a análise completa.
-            </p>
-          </div>
-        )}
-
-        {valor && (
-          <>
-            {/* Painel de controle: Totais vs Médias (apenas chefia) */}
-            {dimensao === 'chefia' && (
-              <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-3 py-2 sm:px-5 sm:py-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-sm font-semibold text-gray-700">Exibir como:</span>
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
+      {/* Seletor de indivíduo */}
+      <div className="rounded-xl bg-surface shadow-sm border border-gray-100 p-3 sm:p-5">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          {placeholder}
+        </label>
+        <div className="relative">
+          <input
+            type="text"
+            value={valor ?? search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              if (valor) setValor(null)
+            }}
+            placeholder={`Digite para buscar...`}
+            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          {!valor && search && filtered.length > 0 && (
+            <ul className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+              {filtered.map((opt) => (
+                <li key={opt}>
                   <button
+                    type="button"
                     onClick={() => {
-                      setDisplayMode('total')
-                      setSelectedProcuradores([])
-                    }}
-                    className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
-                      displayMode === 'total'
-                        ? 'bg-primary text-white font-medium shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    Totais
-                  </button>
-                  <button
-                    onClick={() => setDisplayMode('average')}
-                    className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
-                      displayMode === 'average'
-                        ? 'bg-primary text-white font-medium shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    Médias
-                  </button>
-
-                  {displayMode === 'average' && (
-                    <>
-                      <span className="ml-2 text-sm text-gray-500">por:</span>
-                      {([['day', 'Dia'], ['month', 'Mês'], ['year', 'Ano']] as const).map(([unit, label]) => (
-                        <button
-                          key={unit}
-                          onClick={() => setAverageUnit(unit)}
-                          className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                            averageUnit === unit
-                              ? 'bg-blue-600 text-white font-medium shadow-sm'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                      {procuradorOptions.length > 0 && (
-                        <div className="ml-2">
-                          <SelectFilter
-                            label="Procuradores"
-                            options={procuradorOptions}
-                            value={selectedProcuradores}
-                            onChange={setSelectedProcuradores}
-                            showSelectAll
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* KPIs: totais ou médias */}
-            {displayMode === 'average' && dimensao === 'chefia' ? (
-              chefiaMedias.isLoading ? (
-                <Spinner />
-              ) : chefiaMedias.isError ? (
-                <ErrorAlert />
-              ) : chefiaMedias.data ? (
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-                  {chefiaMedias.data.kpis.map((kpi) => (
-                    <div key={kpi.label} className="rounded-xl border border-gray-100 bg-surface p-3 shadow-sm sm:p-5">
-                      <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide sm:text-xs">{kpi.label}</p>
-                      <p className="mt-1 text-xl font-bold text-primary sm:mt-2 sm:text-2xl">
-                        {formatDecimal(kpi.media)}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-400">
-                        Total: {formatNumber(kpi.total)} em {chefiaMedias.data!.units_count} {chefiaMedias.data!.unit_label}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : null
-            ) : (
-              <KPIGrid data={kpis.data} isLoading={kpis.isLoading} isError={kpis.isError} />
-            )}
-
-            {/* Gráfico: timeline padrão ou filtrada */}
-            <LineChartCard
-              title="Evolução Mensal"
-              series={
-                displayMode === 'average' && dimensao === 'chefia' && chefiaMedias.data
-                  ? chefiaMedias.data.timeline
-                  : timeline.data
-              }
-              isLoading={
-                displayMode === 'average' && dimensao === 'chefia'
-                  ? chefiaMedias.isLoading
-                  : timeline.isLoading
-              }
-              isError={
-                displayMode === 'average' && dimensao === 'chefia'
-                  ? chefiaMedias.isError
-                  : timeline.isError
-              }
-            />
-
-            {showComparativoProcuradores && (
-              <ComparativoProcuradoresCard
-                data={comparativo.data}
-                isLoading={comparativo.isLoading}
-                isError={comparativo.isError}
-                cargaReduzidaSet={crSet}
-              />
-            )}
-
-            {/* Seletor de tabela para detalhamento */}
-            <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-3 py-2 sm:px-5 sm:py-3">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="text-sm font-semibold text-gray-700">Detalhar:</span>
-                {tabelaOptions.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => {
-                      setTabela(opt.value)
+                      setValor(opt)
+                      setSearch('')
                       setPagination((p) => ({ ...p, page: 1 }))
                     }}
-                    className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
-                      tabela === opt.value
-                        ? 'bg-primary text-white font-medium shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
                   >
-                    {opt.label}
+                    {opt}
                   </button>
-                ))}
-              </div>
-            </div>
-
-            {(groupable.categoria || groupable.modelo || showProcuradorChart) && (
-              <div className={`grid grid-cols-1 gap-6 ${(groupable.categoria && groupable.modelo) || (groupable.categoria && showProcuradorChart) || (groupable.modelo && showProcuradorChart) ? 'xl:grid-cols-2' : ''}`}>
-                {groupable.categoria && (
-                  <BarChartCard
-                    title={`${tabelaLabel} — Por Categoria`}
-                    data={categorias.data}
-                    isLoading={categorias.isLoading}
-                    isError={categorias.isError}
-                  />
-                )}
-                {groupable.modelo && (
-                  <BarChartCard
-                    title={`${tabelaLabel} — Por Modelo`}
-                    data={modelos.data}
-                    isLoading={modelos.isLoading}
-                    isError={modelos.isError}
-                  />
-                )}
-                {showProcuradorChart && (
-                  <BarChartCard
-                    title={`${tabelaLabel} — Por Procurador`}
-                    data={procuradores.data}
-                    isLoading={procuradores.isLoading}
-                    isError={procuradores.isError}
-                    cargaReduzidaSet={crSet}
-                  />
-                )}
-              </div>
-            )}
-
-            <DataTable
-              data={lista.data}
-              columns={TABLE_COLUMNS[tabela] ?? TABLE_COLUMNS.pecas_elaboradas}
-              isLoading={lista.isLoading}
-              isError={lista.isError}
-              pagination={pagination}
-              onPaginationChange={(p) => setPagination((prev) => ({ ...prev, ...p }))}
-              exportTable={tabela}
-            />
-          </>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {valor && (
+          <button
+            onClick={() => { setValor(null); setSearch('') }}
+            className="mt-2 text-xs text-blue-600 hover:underline"
+          >
+            Limpar seleção
+          </button>
         )}
       </div>
-    </>
+
+      {!valor && (
+        <div className="rounded-xl bg-gray-50 border border-dashed border-gray-300 p-6 text-center sm:p-12">
+          <p className="text-gray-500 text-sm">
+            Selecione {dimensao === 'procurador' ? 'um procurador' : dimensao === 'chefia' ? 'uma chefia' : 'um assessor'} acima para ver a análise completa.
+          </p>
+        </div>
+      )}
+
+      {valor && (
+        <>
+          {/* Painel de controle: Totais vs Médias (apenas chefia) */}
+          {dimensao === 'chefia' && (
+            <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-3 py-2 sm:px-5 sm:py-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm font-semibold text-gray-700">Exibir como:</span>
+                <button
+                  onClick={() => {
+                    setDisplayMode('total')
+                    setSelectedProcuradores([])
+                  }}
+                  className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
+                    displayMode === 'total'
+                      ? 'bg-primary text-white font-medium shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Totais
+                </button>
+                <button
+                  onClick={() => setDisplayMode('average')}
+                  className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
+                    displayMode === 'average'
+                      ? 'bg-primary text-white font-medium shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Médias
+                </button>
+
+                {displayMode === 'average' && (
+                  <>
+                    <span className="ml-2 text-sm text-gray-500">por:</span>
+                    {([['day', 'Dia'], ['month', 'Mês'], ['year', 'Ano']] as const).map(([unit, label]) => (
+                      <button
+                        key={unit}
+                        onClick={() => setAverageUnit(unit)}
+                        className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                          averageUnit === unit
+                            ? 'bg-blue-600 text-white font-medium shadow-sm'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    {procuradorOptions.length > 0 && (
+                      <div className="ml-2">
+                        <SelectFilter
+                          label="Procuradores"
+                          options={procuradorOptions}
+                          value={selectedProcuradores}
+                          onChange={setSelectedProcuradores}
+                          showSelectAll
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* KPIs: totais ou médias */}
+          {displayMode === 'average' && dimensao === 'chefia' ? (
+            chefiaMedias.isLoading ? (
+              <Spinner />
+            ) : chefiaMedias.isError ? (
+              <ErrorAlert />
+            ) : chefiaMedias.data ? (
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+                {chefiaMedias.data.kpis.map((kpi) => (
+                  <div key={kpi.label} className="rounded-xl border border-gray-100 bg-surface p-3 shadow-sm sm:p-5">
+                    <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide sm:text-xs">{kpi.label}</p>
+                    <p className="mt-1 text-xl font-bold text-primary sm:mt-2 sm:text-2xl">
+                      {formatDecimal(kpi.media)}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      Total: {formatNumber(kpi.total)} em {chefiaMedias.data!.units_count} {chefiaMedias.data!.unit_label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : null
+          ) : (
+            <KPIGrid data={kpis.data} isLoading={kpis.isLoading} isError={kpis.isError} />
+          )}
+
+          {/* Gráfico: timeline padrão ou filtrada */}
+          <LineChartCard
+            title="Evolução Mensal"
+            series={
+              displayMode === 'average' && dimensao === 'chefia' && chefiaMedias.data
+                ? chefiaMedias.data.timeline
+                : timeline.data
+            }
+            isLoading={
+              displayMode === 'average' && dimensao === 'chefia'
+                ? chefiaMedias.isLoading
+                : timeline.isLoading
+            }
+            isError={
+              displayMode === 'average' && dimensao === 'chefia'
+                ? chefiaMedias.isError
+                : timeline.isError
+            }
+          />
+
+          {showComparativoProcuradores && (
+            <ComparativoProcuradoresCard
+              data={comparativo.data}
+              isLoading={comparativo.isLoading}
+              isError={comparativo.isError}
+              cargaReduzidaSet={crSet}
+            />
+          )}
+
+          {/* Seletor de tabela para detalhamento */}
+          <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-3 py-2 sm:px-5 sm:py-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="text-sm font-semibold text-gray-700">Detalhar:</span>
+              {tabelaOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setTabela(opt.value)
+                    setPagination((p) => ({ ...p, page: 1 }))
+                  }}
+                  className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
+                    tabela === opt.value
+                      ? 'bg-primary text-white font-medium shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {(groupable.categoria || groupable.modelo || showProcuradorChart) && (
+            <div className={`grid grid-cols-1 gap-6 ${(groupable.categoria && groupable.modelo) || (groupable.categoria && showProcuradorChart) || (groupable.modelo && showProcuradorChart) ? 'xl:grid-cols-2' : ''}`}>
+              {groupable.categoria && (
+                <BarChartCard
+                  title={`${tabelaLabel} — Por Categoria`}
+                  data={categorias.data}
+                  isLoading={categorias.isLoading}
+                  isError={categorias.isError}
+                />
+              )}
+              {groupable.modelo && (
+                <BarChartCard
+                  title={`${tabelaLabel} — Por Modelo`}
+                  data={modelos.data}
+                  isLoading={modelos.isLoading}
+                  isError={modelos.isError}
+                />
+              )}
+              {showProcuradorChart && (
+                <BarChartCard
+                  title={`${tabelaLabel} — Por Procurador`}
+                  data={procuradores.data}
+                  isLoading={procuradores.isLoading}
+                  isError={procuradores.isError}
+                  cargaReduzidaSet={crSet}
+                />
+              )}
+            </div>
+          )}
+
+          <DataTable
+            data={lista.data}
+            columns={TABLE_COLUMNS[tabela] ?? TABLE_COLUMNS.pecas_elaboradas}
+            isLoading={lista.isLoading}
+            isError={lista.isError}
+            pagination={pagination}
+            onPaginationChange={(p) => setPagination((prev) => ({ ...prev, ...p }))}
+            exportTable={tabela}
+          />
+        </>
+      )}
+    </div>
   )
 }
