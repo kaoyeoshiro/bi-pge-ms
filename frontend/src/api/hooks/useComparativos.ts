@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import api, { buildQueryString } from '../client'
 import { useFilterParams } from './useFilterParams'
+import type { FilterParams } from './useFilterParams'
 
-export function useCompararChefias(chefias: string[]) {
-  const params = useFilterParams()
+export function useCompararChefias(chefias: string[], filterOverrides?: FilterParams) {
+  const contextParams = useFilterParams()
+  const params = filterOverrides ? { ...contextParams, ...filterOverrides } : contextParams
   return useQuery({
     queryKey: ['comparar-chefias', chefias, params],
     queryFn: async () => {

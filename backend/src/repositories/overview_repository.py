@@ -106,7 +106,7 @@ class OverviewRepository:
         if filters.data_fim:
             stmt = stmt.where(date_col <= str(filters.data_fim))
         if filters.chefia:
-            stmt = stmt.where(model.chefia.in_(filters.chefia))
+            stmt = stmt.where(normalize_chefia_expr(model.chefia).in_(filters.chefia))
         if filters.procurador:
             stmt = stmt.where(model.procurador.in_(filters.procurador))
 
