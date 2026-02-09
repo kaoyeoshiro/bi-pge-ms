@@ -15,6 +15,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorAlert } from '../components/ui/ErrorAlert'
 import { SelectFilter } from '../components/filters/SelectFilter'
 import { useCargaReduzida, useFilterOptions, useAssuntosTree } from '../api/hooks/useFilters'
+import type { AssuntoNode } from '../types'
 import {
   usePerfilKPIs,
   usePerfilTimeline,
@@ -248,15 +249,10 @@ export function PerfilPage(props: PerfilPageProps) {
     return { ...baseParams, assunto: assuntos.join(',') } as FilterParams
   }, [baseParams, isChefia, assuntos])
 
-  // Detectar qual assunto raiz foi selecionado (para auto-drill no card)
-  const selectedRootAssunto = useMemo(() => {
+  // Detectar qual assunto foi selecionado (qualquer nível) + caminho completo
+  const selectedAssunto = useMemo(() => {
     if (!assuntos.length || !assuntosTree) return null
-    for (const node of assuntosTree) {
-      if (assuntos.includes(node.codigo)) {
-        return { codigo: node.codigo, nome: node.nome }
-      }
-    }
-    return null
+    return findSelectedAssunto(assuntosTree, assuntos)
   }, [assuntos, assuntosTree])
 
   const handleClearAll = () => {
@@ -287,7 +283,7 @@ export function PerfilPage(props: PerfilPageProps) {
         </div>
       )}
       <FilterParamsProvider value={params}>
-        <PerfilPageContent {...props} filterAssunto={selectedRootAssunto} />
+        <PerfilPageContent {...props} filterAssunto={selectedAssunto} />
       </FilterParamsProvider>
     </>
   )
@@ -297,7 +293,7 @@ export function PerfilPage(props: PerfilPageProps) {
  * Conteúdo interno da página de perfil.
  * Todos os hooks de API aqui resolvem useFilterParams() via contexto local.
  */
-function PerfilPageContent({ dimensao, placeholder, options: customOptions, showProcuradorChart, showComparativoProcuradores, filterAssunto }: PerfilPageProps & { filterAssunto?: { codigo: number; nome: string } | null }) {
+function PerfilPageContent({ dimensao, placeholder, options: customOptions, showProcuradorChart, showComparativoProcuradores, filterAssunto }: PerfilPageProps & { filterAssunto?: SelectedAssunto | null }) {
   const [valor, setValor] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const tabelaOptions = dimensao === 'assessor'
@@ -630,4 +626,57 @@ function PerfilPageContent({ dimensao, placeholder, options: customOptions, show
       )}
     </div>
   )
+}
+
+// --- Utilitários para busca hierárquica de assunto ---
+
+/** Nó selecionado com caminho completo da raiz até ele. */
+export interface SelectedAssunto {
+  codigo: number
+  nome: string
+  /** Caminho da raiz até o nó (inclusive), para breadcrumb. */
+  path: { codigo: number; nome: string }[]
+}
+
+/**
+ * Busca recursivamente o nó selecionado mais raso na árvore e constrói
+ * o caminho completo (ancestry) da raiz até ele.
+ *
+ * Quando o usuário seleciona "Medicamentos" (filho de "Saúde"),
+ * `selectedCodes` contém [codigo_medicamentos, ...códigos_descendentes].
+ * A função percorre nível por nível (BFS implícito) para encontrar
+ * o nó de menor profundidade presente em `selectedCodes`.
+ */
+export function findSelectedAssunto(
+  tree: AssuntoNode[],
+  selectedCodes: number[],
+): SelectedAssunto | null {
+  if (!selectedCodes.length) return null
+  const codeSet = new Set(selectedCodes)
+
+  function search(
+    nodes: AssuntoNode[],
+    ancestors: { codigo: number; nome: string }[],
+  ): SelectedAssunto | null {
+    // Primeiro verifica todos os nós deste nível
+    for (const node of nodes) {
+      if (codeSet.has(node.codigo)) {
+        const fullPath = [...ancestors, { codigo: node.codigo, nome: node.nome }]
+        return { codigo: node.codigo, nome: node.nome, path: fullPath }
+      }
+    }
+    // Depois recursa nos filhos
+    for (const node of nodes) {
+      if (node.filhos?.length) {
+        const found = search(
+          node.filhos,
+          [...ancestors, { codigo: node.codigo, nome: node.nome }],
+        )
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  return search(tree, [])
 }

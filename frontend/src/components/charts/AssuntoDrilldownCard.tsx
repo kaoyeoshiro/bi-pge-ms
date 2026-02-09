@@ -17,8 +17,8 @@ interface AssuntoDrilldownCardProps {
   dimensao: string
   valor: string | null
   tabela: string | null
-  /** Quando o filtro de assunto está ativo, auto-navega para este nó. */
-  filterAssunto?: { codigo: number; nome: string } | null
+  /** Quando o filtro de assunto está ativo, auto-navega para este nó com caminho completo. */
+  filterAssunto?: { codigo: number; nome: string; path: { codigo: number; nome: string }[] } | null
 }
 
 export function AssuntoDrilldownCard({
@@ -30,10 +30,10 @@ export function AssuntoDrilldownCard({
 }: AssuntoDrilldownCardProps) {
   const [path, setPath] = useState<BreadcrumbItem[]>([])
 
-  // Auto-navegar quando o filtro de assunto muda
+  // Auto-navegar quando o filtro de assunto muda (usa caminho completo)
   useEffect(() => {
-    if (filterAssunto) {
-      setPath([{ codigo: filterAssunto.codigo, nome: filterAssunto.nome }])
+    if (filterAssunto?.path?.length) {
+      setPath(filterAssunto.path)
     } else {
       setPath([])
     }
