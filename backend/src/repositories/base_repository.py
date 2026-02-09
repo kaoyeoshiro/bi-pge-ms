@@ -75,7 +75,11 @@ class BaseRepository:
             stmt = stmt.where(chefia_expr.in_(filters.chefia))
 
         if filters.procurador:
-            proc_expr = self._get_filter_expr("procurador")
+            # Usa coluna resolvida (PROCURADOR_COL_MAP): em pecas_finalizadas
+            # filtra por usuario_finalizacao (quem finalizou), não por procurador
+            # (dono do caso). Sem isso, KPIs mostram peças finalizadas por OUTROS
+            # nos processos do procurador, inflando/deflando a métrica.
+            proc_expr = self._get_group_expr("procurador")
             stmt = stmt.where(proc_expr.in_(filters.procurador))
 
         if filters.categoria and hasattr(self.model, "categoria"):
@@ -204,8 +208,8 @@ class BaseRepository:
     def _get_filter_expr(self, column_name: str) -> Column:
         """Retorna expressão de filtro com normalização (sem resolução de coluna).
 
-        Usado em _apply_global_filters para filtrar pela coluna original
-        (ex: procurador = dono do caso), não pela coluna resolvida.
+        Usado apenas para chefia em _apply_global_filters.
+        Para procurador, usar _get_group_expr (com resolução via PROCURADOR_COL_MAP).
         """
         col = getattr(self.model, column_name)
         if column_name in ("chefia",):

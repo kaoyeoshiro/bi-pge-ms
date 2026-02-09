@@ -38,8 +38,13 @@ TABLE_MODELS = {
 
 @pytest.fixture
 def empty_filters() -> GlobalFilters:
-    """Filtros globais vazios (sem restrição de período ou chefia)."""
-    return GlobalFilters()
+    """Filtros globais sem filtro temporal, com ocultação desativada.
+
+    Desabilita exclude_hidden para que o comparativo não aplique o filtro de
+    ocultação administrativa, permitindo comparação direta com queries SQL
+    que também não aplicam esse filtro.
+    """
+    return GlobalFilters(exclude_hidden=False, exclude_no_pendencias=False)
 
 
 @pytest.mark.asyncio
