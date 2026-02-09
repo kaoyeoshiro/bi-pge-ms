@@ -410,7 +410,7 @@ function PerfilPageContent({ dimensao, placeholder, options: customOptions, show
                       </button>
                     ))}
                     {procuradorOptions.length > 0 && (
-                      <div className="ml-2">
+                      <div className="ml-2 flex items-center gap-1.5">
                         <SelectFilter
                           label="Procuradores"
                           options={procuradorOptions}
@@ -418,6 +418,21 @@ function PerfilPageContent({ dimensao, placeholder, options: customOptions, show
                           onChange={setSelectedProcuradores}
                           showSelectAll
                         />
+                        <div className="group relative">
+                          <button
+                            type="button"
+                            className="flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                            aria-label="Informações sobre filtro de procuradores"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                          <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-64 -translate-x-1/2 rounded-lg bg-gray-800 px-3 py-2 text-xs leading-relaxed text-white shadow-lg opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                            Ao selecionar um ou mais procuradores, as médias exibidas passam a ser calculadas exclusivamente com base na produção dos selecionados, e não na produção total da chefia.
+                            <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </>
@@ -442,6 +457,11 @@ function PerfilPageContent({ dimensao, placeholder, options: customOptions, show
                     </p>
                     <p className="mt-1 text-xs text-gray-400">
                       Total: {formatNumber(kpi.total)} em {chefiaMedias.data!.units_count} {chefiaMedias.data!.unit_label}
+                      {chefiaMedias.data!.person_count > 1 && (
+                        <span className="ml-1 text-blue-500">
+                          ({chefiaMedias.data!.person_count} procuradores)
+                        </span>
+                      )}
                     </p>
                   </div>
                 ))}

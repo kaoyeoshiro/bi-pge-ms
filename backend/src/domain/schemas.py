@@ -102,6 +102,7 @@ class ChefiaMediasResponse(BaseModel):
     timeline: list[TimelineSeries]
     units_count: int
     unit_label: str
+    person_count: int = 1
 
 
 # --- Ocultação de Produção ---

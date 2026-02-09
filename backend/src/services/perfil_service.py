@@ -534,10 +534,13 @@ class PerfilService:
         # Calcula médias a partir do range real das timelines coletadas
         units, unit_label = self._compute_units_from_timelines(timelines, average_unit)
 
+        # Quando há procuradores selecionados, a média é por pessoa
+        n_persons = len(procurador_nomes) if use_person_filter and procurador_nomes else 1
+
         kpis = []
         for table_name, label in labels.items():
             total = totals[table_name]
-            media = round(total / units, 2)
+            media = round(total / units / n_persons, 2)
             kpis.append(ChefiaMediaKPI(label=label, total=total, media=media))
 
         # Monta séries de timeline
@@ -551,4 +554,5 @@ class PerfilService:
             timeline=timeline,
             units_count=units,
             unit_label=unit_label,
+            person_count=n_persons,
         )

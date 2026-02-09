@@ -81,6 +81,7 @@ export interface ChefiaMediasResponse {
   timeline: TimelineSeries[]
   units_count: number
   unit_label: string
+  person_count: number
 }
 
 // --- Comparativo Procuradores ---
