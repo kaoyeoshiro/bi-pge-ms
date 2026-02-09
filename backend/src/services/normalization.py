@@ -4,21 +4,28 @@ from sqlalchemy import Column, case, func
 
 
 CHEFIA_PS_NORMALIZADA = "PS - Procuradoria de Saúde"
+CHEFIA_PAT_NORMALIZADA = "PAT - Procuradoria de Assuntos Tributários"
 
 
 def normalize_chefia_expr(col: Column) -> Column:
-    """Retorna expressão SQL que unifica variantes de PS em 'PS - Procuradoria de Saúde'.
+    """Retorna expressão SQL que unifica variantes de PS e PAT.
 
-    Exemplos transformados:
+    PS normalizadas:
     - 'PS (Baixo Impacto)' → 'PS - Procuradoria de Saúde'
     - 'PS (Cartório)' → 'PS - Procuradoria de Saúde'
     - 'PS (Comum)' → 'PS - Procuradoria de Saúde'
     - 'PS (Estratégico)' → 'PS - Procuradoria de Saúde'
+    - 'PS (Cumprimento) - Desativada' → 'PS - Procuradoria de Saúde'
     - 'Procuradoria da Saúde (2º grau)' → 'PS - Procuradoria de Saúde'
+
+    PAT normalizadas:
+    - 'PAT-Procuradoria de Assuntos Tributários' → 'PAT - Procuradoria de Assuntos Tributários'
+    - 'PAT - Subchefia de Execução Fiscal' → 'PAT - Procuradoria de Assuntos Tributários'
     """
     return case(
         (col.op("~")(r"^PS\s*\("), CHEFIA_PS_NORMALIZADA),
         (col.op("~*")(r"Procuradoria\s+d[ae]\s+Sa[uú]de"), CHEFIA_PS_NORMALIZADA),
+        (col.op("~*")(r"^PAT[\s-]"), CHEFIA_PAT_NORMALIZADA),
         else_=col,
     )
 
@@ -33,6 +40,7 @@ def normalize_chefia_sql(col_expr: str) -> str:
         f"CASE "
         f"WHEN {col_expr} ~ '^PS\\s*\\(' THEN '{CHEFIA_PS_NORMALIZADA}' "
         f"WHEN {col_expr} ~* 'Procuradoria\\s+d[ae]\\s+Sa[uú]de' THEN '{CHEFIA_PS_NORMALIZADA}' "
+        f"WHEN {col_expr} ~* '^PAT[\\s-]' THEN '{CHEFIA_PAT_NORMALIZADA}' "
         f"ELSE {col_expr} END"
     )
 

@@ -21,13 +21,16 @@ async def parse_global_filters(
     categoria: list[str] = Query(default=[], description="Categorias para filtrar"),
     area: list[str] = Query(default=[], description="Áreas para filtrar"),
     assessor: list[str] = Query(default=[], description="Assessores para filtrar"),
+    assunto: str = Query("", description="Códigos de assunto separados por vírgula"),
 ) -> GlobalFilters:
     """Extrai filtros globais dos query params.
 
     Aceita tanto `ano` (singular, retrocompat) quanto `anos` (múltiplos).
     Se ambos forem fornecidos, `anos` tem prioridade.
+    O campo `assunto` aceita códigos separados por vírgula (ex: "123,456,789").
     """
     resolved_anos = anos if anos else ([ano] if ano else [])
+    assunto_list = [int(x) for x in assunto.split(",") if x.strip()] if assunto else []
     return GlobalFilters(
         anos=resolved_anos,
         mes=mes,
@@ -38,6 +41,7 @@ async def parse_global_filters(
         categoria=categoria,
         area=area,
         assessor=assessor,
+        assunto=assunto_list,
     )
 
 

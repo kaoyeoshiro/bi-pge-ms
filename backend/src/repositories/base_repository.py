@@ -3,14 +3,14 @@
 import math
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Select, func, literal, select, or_, String, cast, desc, asc, text
+from sqlalchemy import Column, DateTime, Integer, Select, case, func, literal, select, or_, String, cast, desc, asc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
 from src.domain.constants import CATEGORIAS_NAO_PRODUTIVAS
 from src.domain.enums import Granularity
 from src.domain.filters import GlobalFilters, PaginationParams
-from src.domain.models import HiddenProcuradorProducao, PecaFinalizada, Pendencia, UserRole
+from src.domain.models import HiddenProcuradorProducao, PecaFinalizada, Pendencia, ProcessoAssunto, UserRole
 from src.domain.schemas import GroupCount, PaginatedResponse, TimelinePoint
 from src.services.normalization import normalize_chefia_expr, normalize_procurador_expr
 
@@ -47,17 +47,41 @@ class BaseRepository:
             return self.model.data_finalizacao
         return self.model.data
 
+    def _get_year_expr(self):
+        """Retorna expressão SQL para o 'ano' do registro.
+
+        Para processos_novos, o ano é extraído do número CNJ (numero_formatado).
+        Suporta dois formatos: NNNNNNN-DD.YYYY.J.TT.OOOO e NNNNNNNNN.YYYY.J.TT.OOOO.
+        Usa SPLIT_PART(numero_formatado, '.', 2) para extrair o ano (segundo segmento).
+        Registros sem formato CNJ válido usam o ano da coluna data como fallback.
+        Para demais tabelas, usa EXTRACT(YEAR FROM date_col).
+        """
+        date_col = self._get_date_column()
+        if self.model.__tablename__ == "processos_novos":
+            # Verifica se o numero_formatado tem formato CNJ (contém .YYYY.)
+            has_cnj_year = self.model.numero_formatado.op("~")(r"\.\d{4}\.")
+            # Extrai ano como segundo segmento separado por ponto
+            cnj_year = cast(
+                func.split_part(self.model.numero_formatado, ".", 2), Integer
+            )
+            return case(
+                (has_cnj_year, cnj_year),
+                else_=cast(func.extract("year", date_col), Integer),
+            )
+        return func.extract("year", date_col)
+
     def _apply_global_filters(
         self, stmt: Select, filters: GlobalFilters
     ) -> Select:
         """Aplica filtros globais condicionalmente ao statement."""
         date_col = self._get_date_column()
+        year_expr = self._get_year_expr()
 
         if filters.anos:
             if len(filters.anos) == 1:
-                stmt = stmt.where(func.extract("year", date_col) == filters.anos[0])
+                stmt = stmt.where(year_expr == filters.anos[0])
             else:
-                stmt = stmt.where(func.extract("year", date_col).in_(filters.anos))
+                stmt = stmt.where(year_expr.in_(filters.anos))
 
         if filters.mes:
             stmt = stmt.where(func.extract("month", date_col) == filters.mes)
@@ -97,6 +121,17 @@ class BaseRepository:
             else:
                 # Tabela sem coluna de assessor (ex: processos_novos) → 0 resultados
                 stmt = stmt.where(literal(False))
+
+        # Filtro por assunto: subquery em processo_assuntos
+        # Só aplicado a processos_novos — assunto é propriedade do processo
+        if filters.assunto and self.model.__tablename__ == "processos_novos":
+            assunto_subq = (
+                select(ProcessoAssunto.numero_processo)
+                .where(ProcessoAssunto.codigo_assunto.in_(filters.assunto))
+                .distinct()
+                .scalar_subquery()
+            )
+            stmt = stmt.where(self.model.numero_processo.in_(assunto_subq))
 
         # Excluir categorias não-produtivas de pecas_finalizadas
         if self.model is PecaFinalizada:

@@ -9,6 +9,7 @@ interface FilterState {
   procuradores: string[]
   categorias: string[]
   areas: string[]
+  assuntos: number[]
 
   setAnos: (anos: number[]) => void
   setMes: (mes: number | null) => void
@@ -18,6 +19,7 @@ interface FilterState {
   setProcuradores: (procuradores: string[]) => void
   setCategorias: (categorias: string[]) => void
   setAreas: (areas: string[]) => void
+  setAssuntos: (assuntos: number[]) => void
   clearAll: () => void
   toQueryParams: () => Record<string, string | string[]>
 }
@@ -31,6 +33,7 @@ const initialState = {
   procuradores: [] as string[],
   categorias: [] as string[],
   areas: [] as string[],
+  assuntos: [] as number[],
 }
 
 export const useFilterStore = create<FilterState>((set, get) => ({
@@ -44,6 +47,7 @@ export const useFilterStore = create<FilterState>((set, get) => ({
   setProcuradores: (procuradores) => set({ procuradores }),
   setCategorias: (categorias) => set({ categorias }),
   setAreas: (areas) => set({ areas }),
+  setAssuntos: (assuntos) => set({ assuntos }),
 
   clearAll: () => set(initialState),
 
@@ -59,6 +63,7 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     if (state.procuradores.length) params.procurador = state.procuradores
     if (state.categorias.length) params.categoria = state.categorias
     if (state.areas.length) params.area = state.areas
+    if (state.assuntos.length) params.assunto = state.assuntos.join(',')
 
     return params
   },

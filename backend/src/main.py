@@ -89,6 +89,37 @@ async def _ensure_auxiliary_tables() -> None:
                     CREATE INDEX IF NOT EXISTS ix_hidden_dates_active
                     ON admin_hidden_procurador_producao(chefia, start_date, end_date, is_active)
                 """))
+                # Tabelas de assuntos (populadas via script importar_assuntos.py)
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS assuntos (
+                        codigo       INTEGER PRIMARY KEY,
+                        codigo_pai   INTEGER REFERENCES assuntos(codigo),
+                        nome         VARCHAR(500),
+                        descricao    TEXT,
+                        nivel        SMALLINT,
+                        numero_fmt   VARCHAR(50)
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS processo_assuntos (
+                        id                SERIAL PRIMARY KEY,
+                        numero_processo   BIGINT NOT NULL,
+                        codigo_assunto    INTEGER NOT NULL REFERENCES assuntos(codigo),
+                        assunto_principal BOOLEAN DEFAULT FALSE
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_proc_assuntos_numero
+                    ON processo_assuntos(numero_processo)
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_proc_assuntos_assunto
+                    ON processo_assuntos(codigo_assunto)
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_assuntos_pai
+                    ON assuntos(codigo_pai)
+                """))
             logger.info("Tabelas auxiliares verificadas.")
             return
         except Exception as exc:

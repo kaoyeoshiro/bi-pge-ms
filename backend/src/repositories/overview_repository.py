@@ -1,6 +1,6 @@
 """Repositório para queries cross-table do dashboard Overview."""
 
-from sqlalchemy import DateTime, func, literal, or_, select, text
+from sqlalchemy import DateTime, Integer, case, cast, func, literal, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.constants import CATEGORIAS_NAO_PRODUTIVAS
@@ -9,6 +9,7 @@ from src.domain.models import (
     HiddenProcuradorProducao,
     PecaFinalizada,
     Pendencia,
+    ProcessoAssunto,
     ProcessoNovo,
 )
 from src.domain.schemas import KPIValue, TimelinePoint, TimelineSeries
@@ -40,12 +41,24 @@ class OverviewRepository:
     ) -> str:
         """Gera cláusula WHERE SQL para filtros de data."""
         clauses = []
+
+        # Para processos_novos, o ano é do número CNJ (numero_formatado)
+        # Suporta NNNNNNN-DD.YYYY... e NNNNNNNNN.YYYY... via SPLIT_PART
+        if table == "processos_novos":
+            year_sql = (
+                f"CASE WHEN numero_formatado ~ '\\.\\d{{4}}\\.' "
+                f"THEN CAST(SPLIT_PART(numero_formatado, '.', 2) AS INTEGER) "
+                f"ELSE EXTRACT(YEAR FROM {date_col})::INTEGER END"
+            )
+        else:
+            year_sql = f"EXTRACT(YEAR FROM {date_col})"
+
         if filters.anos:
             if len(filters.anos) == 1:
-                clauses.append(f"EXTRACT(YEAR FROM {date_col}) = {filters.anos[0]}")
+                clauses.append(f"{year_sql} = {filters.anos[0]}")
             else:
                 anos_str = ",".join(str(a) for a in filters.anos)
-                clauses.append(f"EXTRACT(YEAR FROM {date_col}) IN ({anos_str})")
+                clauses.append(f"{year_sql} IN ({anos_str})")
         if filters.mes:
             clauses.append(f"EXTRACT(MONTH FROM {date_col}) = {filters.mes}")
         if filters.data_inicio:
@@ -81,6 +94,16 @@ class OverviewRepository:
                 f")"
             )
 
+        # Filtro por assunto: subquery em processo_assuntos (só processos_novos)
+        if filters.assunto and table == "processos_novos":
+            codigos = ",".join(str(c) for c in filters.assunto)
+            clauses.append(
+                f"numero_processo IN ("
+                f"SELECT DISTINCT numero_processo FROM processo_assuntos "
+                f"WHERE codigo_assunto IN ({codigos})"
+                f")"
+            )
+
         return " AND ".join(clauses) if clauses else "1=1"
 
     async def _count_filtered(
@@ -94,11 +117,24 @@ class OverviewRepository:
 
         stmt = select(func.count()).select_from(model)
 
+        # Para processos_novos, o ano é do número CNJ (numero_formatado)
+        if model is ProcessoNovo:
+            has_cnj_year = model.numero_formatado.op("~")(r"\.\d{4}\.")
+            cnj_year = cast(
+                func.split_part(model.numero_formatado, ".", 2), Integer
+            )
+            year_expr = case(
+                (has_cnj_year, cnj_year),
+                else_=cast(func.extract("year", date_col), Integer),
+            )
+        else:
+            year_expr = func.extract("year", date_col)
+
         if filters.anos:
             if len(filters.anos) == 1:
-                stmt = stmt.where(func.extract("year", date_col) == filters.anos[0])
+                stmt = stmt.where(year_expr == filters.anos[0])
             else:
-                stmt = stmt.where(func.extract("year", date_col).in_(filters.anos))
+                stmt = stmt.where(year_expr.in_(filters.anos))
         if filters.mes:
             stmt = stmt.where(func.extract("month", date_col) == filters.mes)
         if filters.data_inicio:
@@ -115,6 +151,16 @@ class OverviewRepository:
             stmt = stmt.where(
                 PecaFinalizada.categoria.notin_(CATEGORIAS_NAO_PRODUTIVAS)
             )
+
+        # Filtro por assunto: subquery em processo_assuntos (só processos_novos)
+        if filters.assunto and model is ProcessoNovo:
+            assunto_subq = (
+                select(ProcessoAssunto.numero_processo)
+                .where(ProcessoAssunto.codigo_assunto.in_(filters.assunto))
+                .distinct()
+                .scalar_subquery()
+            )
+            stmt = stmt.where(model.numero_processo.in_(assunto_subq))
 
         # Excluir produção oculta por regras administrativas
         if filters.exclude_hidden and model.__tablename__ in _HIDDEN_TABLES:

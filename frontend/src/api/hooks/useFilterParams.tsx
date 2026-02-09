@@ -48,6 +48,7 @@ export function useFilterParams() {
   const procuradores = useFilterStore((s) => s.procuradores)
   const categorias = useFilterStore((s) => s.categorias)
   const areas = useFilterStore((s) => s.areas)
+  const assuntos = useFilterStore((s) => s.assuntos)
 
   return useMemo(() => {
     // Se um FilterParamsProvider está presente, usar seus params
@@ -63,6 +64,7 @@ export function useFilterParams() {
     if (procuradores.length) params.procurador = procuradores
     if (categorias.length) params.categoria = categorias
     if (areas.length) params.area = areas
+    if (assuntos.length) params.assunto = assuntos.join(',')
     return params
-  }, [override, anos, mes, dataInicio, dataFim, chefias, procuradores, categorias, areas])
+  }, [override, anos, mes, dataInicio, dataFim, chefias, procuradores, categorias, areas, assuntos])
 }

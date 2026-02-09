@@ -28,6 +28,8 @@ interface BarChartCardProps {
   layout?: 'horizontal' | 'vertical'
   onClick?: (grupo: string) => void
   cargaReduzidaSet?: Set<string>
+  /** Exibe percentual ao lado do valor absoluto. */
+  showPercentage?: boolean
 }
 
 export function BarChartCard({
@@ -38,13 +40,14 @@ export function BarChartCard({
   layout = 'horizontal',
   onClick,
   cargaReduzidaSet,
+  showPercentage,
 }: BarChartCardProps) {
   if (isLoading) return <Card title={title}><Spinner /></Card>
   if (isError) return <Card title={title}><ErrorAlert /></Card>
   if (!data?.length) return <Card title={title}><EmptyState /></Card>
 
   if (layout === 'horizontal') {
-    return <HorizontalBars title={title} data={data} onClick={onClick} cargaReduzidaSet={cargaReduzidaSet} />
+    return <HorizontalBars title={title} data={data} onClick={onClick} cargaReduzidaSet={cargaReduzidaSet} showPercentage={showPercentage} />
   }
 
   return <VerticalBars title={title} data={data} onClick={onClick} />
@@ -56,14 +59,18 @@ function HorizontalBars({
   data,
   onClick,
   cargaReduzidaSet,
+  showPercentage,
 }: {
   title: string
   data: GroupCount[]
   onClick?: (grupo: string) => void
   cargaReduzidaSet?: Set<string>
+  showPercentage?: boolean
 }) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE)
   const maxTotal = Math.max(...data.map((d) => d.total))
+  // % relativo ao primeiro item (pai na hierarquia = 100%)
+  const percentageBase = showPercentage ? data[0]?.total ?? 0 : 0
   const visibleData = data.slice(0, visibleCount)
   const hasMore = visibleCount < data.length
   const remaining = data.length - visibleCount
@@ -96,6 +103,11 @@ function HorizontalBars({
               </span>
               <span className="text-[13px] font-semibold text-gray-900 shrink-0 tabular-nums">
                 {formatNumber(d.total)}
+                {showPercentage && percentageBase > 0 && (
+                  <span className="ml-1 text-[11px] font-normal text-gray-400">
+                    ({((d.total / percentageBase) * 100).toFixed(1)}%)
+                  </span>
+                )}
               </span>
             </div>
             <div className="h-5 w-full rounded bg-gray-100">

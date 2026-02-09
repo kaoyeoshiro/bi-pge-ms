@@ -13,14 +13,17 @@ logger = logging.getLogger(__name__)
 
 from src.domain.filters import GlobalFilters, PaginationParams
 from src.domain.models import (
+    Assunto,
     PecaElaborada,
     PecaFinalizada,
     Pendencia,
+    ProcessoAssunto,
     ProcessoNovo,
     TABLE_MODEL_MAP,
     UserRole,
 )
 from src.domain.schemas import (
+    AssuntoGroupCount,
     ChefiaMediaKPI,
     ChefiaMediasResponse,
     GroupCount,
@@ -79,24 +82,30 @@ class PerfilService:
     ) -> list[KPIValue]:
         """KPIs para o indivíduo selecionado.
 
-        Procurador/Chefia: processos_novos, pecas_finalizadas, pendencias.
-        Assessor: inclui também pecas_elaboradas (sua métrica de produção).
+        Chefia: processos_novos, pecas_finalizadas, pendencias.
+        Procurador: pecas_finalizadas, pendencias (sem processos_novos —
+            titularidade muda ao longo do tempo, distorcendo a atribuição).
+        Assessor: pecas_elaboradas, pecas_finalizadas, pendencias.
         """
         f = self._build_filters(dimensao, valor, filters)
 
-        processos = await self.repos["processos_novos"].total_count(f)
         finalizadas = await self.repos["pecas_finalizadas"].total_count(f)
         pendencias = await self.repos["pendencias"].total_count(f)
 
-        kpis = [
-            KPIValue(label="Processos Novos", valor=processos),
-            KPIValue(label="Peças Finalizadas", valor=finalizadas),
-            KPIValue(label="Pendências", valor=pendencias),
-        ]
+        kpis: list[KPIValue] = []
+
+        # Processos novos: apenas para chefia (global e chefia são confiáveis,
+        # mas por procurador distorce pois a titularidade muda)
+        if dimensao == "chefia":
+            processos = await self.repos["processos_novos"].total_count(f)
+            kpis.append(KPIValue(label="Processos Novos", valor=processos))
 
         if dimensao == "assessor":
             elaboradas = await self.repos["pecas_elaboradas"].total_count(f)
-            kpis.insert(1, KPIValue(label="Peças Elaboradas", valor=elaboradas))
+            kpis.append(KPIValue(label="Peças Elaboradas", valor=elaboradas))
+
+        kpis.append(KPIValue(label="Peças Finalizadas", valor=finalizadas))
+        kpis.append(KPIValue(label="Pendências", valor=pendencias))
 
         return kpis
 
@@ -111,13 +120,14 @@ class PerfilService:
         """
         f = self._build_filters(dimensao, valor, filters)
 
-        labels: dict[str, str] = {
-            "processos_novos": "Processos Novos",
-            "pecas_finalizadas": "Peças Finalizadas",
-            "pendencias": "Pendências",
-        }
+        labels: dict[str, str] = {}
+        # Processos novos: apenas para chefia (titularidade muda ao longo do tempo)
+        if dimensao == "chefia":
+            labels["processos_novos"] = "Processos Novos"
         if dimensao == "assessor":
             labels["pecas_elaboradas"] = "Peças Elaboradas"
+        labels["pecas_finalizadas"] = "Peças Finalizadas"
+        labels["pendencias"] = "Pendências"
 
         series = []
         for table_name, label in labels.items():
@@ -178,6 +188,109 @@ class PerfilService:
         f = self._build_filters(dimensao, valor, filters)
         repo = self.repos[tabela]
         return await repo.count_by_group(f, "procurador", limit)
+
+    @cached(ttl=300)
+    async def get_por_assunto(
+        self,
+        dimensao: str,
+        valor: str,
+        filters: GlobalFilters,
+        tabela: str = "processos_novos",
+        limit: int = 15,
+        assunto_pai: int | None = None,
+    ) -> list[AssuntoGroupCount]:
+        """Drill-down hierárquico por assunto.
+
+        Retorna os filhos diretos de `assunto_pai` (ou raízes se None).
+        Cada filho acumula o total de todos os seus descendentes via CTE recursivo.
+        """
+        model = TABLE_MODEL_MAP[tabela]
+        repo = self.repos[tabela]
+        f = self._build_filters(dimensao, valor, filters)
+
+        # Limpa filtro de assunto para não conflitar com o drill-down
+        f.assunto = []
+
+        # CTE recursivo: descendentes de cada filho direto
+        if assunto_pai is not None:
+            children_filter = Assunto.codigo_pai == assunto_pai
+        else:
+            children_filter = Assunto.codigo_pai.is_(None)
+
+        # Âncora: filhos diretos do nó selecionado
+        descendentes = (
+            select(
+                Assunto.codigo.label("codigo"),
+                Assunto.codigo.label("filho_direto"),
+            )
+            .where(children_filter)
+            .cte(name="descendentes", recursive=True)
+        )
+
+        # Parte recursiva: descendentes dos filhos
+        assunto_alias = Assunto.__table__.alias("a_rec")
+        descendentes = descendentes.union_all(
+            select(
+                assunto_alias.c.codigo,
+                descendentes.c.filho_direto,
+            ).where(assunto_alias.c.codigo_pai == descendentes.c.codigo)
+        )
+
+        # Query principal: contagem agrupada por filho direto
+        # COUNT(DISTINCT id) evita inflação: um registro com múltiplos assuntos
+        # no mesmo ramo é contado apenas uma vez (JOIN multiplica linhas).
+        stmt = (
+            select(
+                descendentes.c.filho_direto.label("filho_direto"),
+                Assunto.nome.label("nome"),
+                func.count(func.distinct(model.id)).label("total"),
+            )
+            .select_from(model)
+            .join(
+                ProcessoAssunto,
+                ProcessoAssunto.numero_processo == model.numero_processo,
+            )
+            .join(
+                descendentes,
+                descendentes.c.codigo == ProcessoAssunto.codigo_assunto,
+            )
+            .join(
+                Assunto,
+                Assunto.codigo == descendentes.c.filho_direto,
+            )
+            .where(ProcessoAssunto.assunto_principal.is_(True))
+            .group_by(descendentes.c.filho_direto, Assunto.nome)
+            .order_by(func.count(func.distinct(model.id)).desc())
+            .limit(limit)
+        )
+
+        stmt = repo._apply_global_filters(stmt, f)
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+
+        if not rows:
+            return []
+
+        # Verificar quais filhos têm sub-filhos
+        filho_codigos = [row.filho_direto for row in rows]
+        has_children_stmt = (
+            select(Assunto.codigo_pai)
+            .where(Assunto.codigo_pai.in_(filho_codigos))
+            .group_by(Assunto.codigo_pai)
+        )
+        hc_result = await self.session.execute(has_children_stmt)
+        parents_with_children = {row[0] for row in hc_result.all()}
+
+        return [
+            AssuntoGroupCount(
+                grupo=row.nome or f"Código {row.filho_direto}",
+                total=row.total,
+                codigo=row.filho_direto,
+                has_children=row.filho_direto in parents_with_children,
+            )
+            for row in rows
+        ]
 
     async def _get_por_procurador_finalizador(
         self,
@@ -293,14 +406,14 @@ class PerfilService:
         f = self._build_filters("chefia", chefia, filters)
         totais: dict[str, dict[str, int]] = defaultdict(
             lambda: {
-                "processos_novos": 0,
                 "pecas_finalizadas": 0,
                 "pendencias": 0,
             }
         )
 
+        # Processos novos removido: titularidade muda ao longo do tempo,
+        # distorcendo a atribuição individual do procurador.
         table_models = {
-            "processos_novos": ProcessoNovo,
             "pecas_finalizadas": PecaFinalizada,
             "pendencias": Pendencia,
         }

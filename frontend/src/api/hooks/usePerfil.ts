@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import api, { buildQueryString } from '../client'
 import { useFilterParams } from './useFilterParams'
 import type {
+  AssuntoGroupCount,
   ChefiaMediasResponse,
   GroupCount,
   KPIValue,
@@ -113,6 +114,33 @@ export function usePerfilPorProcurador(
           limit,
         })}`
       )
+      return data
+    },
+    enabled: !!valor && !!tabela,
+  })
+}
+
+/** Ranking por assunto com drill-down hierárquico. */
+export function usePerfilPorAssunto(
+  dimensao: string,
+  valor: string | null,
+  tabela: string | null = 'processos_novos',
+  limit = 15,
+  assuntoPai: number | null = null,
+) {
+  const params = useFilterParams()
+  return useQuery<AssuntoGroupCount[]>({
+    queryKey: ['perfil-assuntos', dimensao, valor, tabela, params, limit, assuntoPai],
+    queryFn: async () => {
+      const qp: Record<string, string | string[] | number | undefined | null> = {
+        ...params,
+        dimensao,
+        valor: valor!,
+        tabela: tabela!,
+        limit,
+      }
+      if (assuntoPai !== null) qp.assunto_pai = assuntoPai
+      const { data } = await api.get(`/perfil/por-assunto${buildQueryString(qp)}`)
       return data
     },
     enabled: !!valor && !!tabela,

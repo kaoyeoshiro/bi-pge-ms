@@ -68,6 +68,11 @@ export interface GlobalFilters {
   area?: string[]
 }
 
+export interface AssuntoGroupCount extends GroupCount {
+  codigo: number
+  has_children: boolean
+}
+
 // --- Médias Chefia ---
 
 export interface ChefiaMediaKPI {
@@ -88,7 +93,6 @@ export interface ChefiaMediasResponse {
 
 export interface ProcuradorComparativo {
   procurador: string
-  processos_novos: number
   pecas_finalizadas: number
   pendencias: number
   total: number
@@ -155,4 +159,13 @@ export interface HiddenProcuradorUpdate {
   end_date?: string
   is_active?: boolean
   reason?: string
+}
+
+// --- Assuntos ---
+
+export interface AssuntoNode {
+  codigo: number
+  nome: string
+  nivel: number
+  filhos: AssuntoNode[]
 }

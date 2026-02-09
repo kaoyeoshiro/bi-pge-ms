@@ -59,12 +59,12 @@ class FilterOptions(BaseModel):
 class ProcuradorComparativo(BaseModel):
     """Métricas de procurador para comparativo dentro de uma chefia.
 
-    Apenas métricas de procurador (dono do caso).
+    Apenas pecas_finalizadas e pendencias.
+    Processos novos removido: titularidade muda ao longo do tempo.
     Peças elaboradas é métrica de assessor e não aparece aqui.
     """
 
     procurador: str
-    processos_novos: int = 0
     pecas_finalizadas: int = 0
     pendencias: int = 0
     total: int = 0
@@ -146,3 +146,22 @@ class HiddenProcuradorResponse(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: datetime | None
+
+
+# --- Assuntos ---
+
+
+class AssuntoGroupCount(GroupCount):
+    """Contagem agrupada com código do assunto e flag de filhos."""
+
+    codigo: int
+    has_children: bool
+
+
+class AssuntoNode(BaseModel):
+    """Nó da árvore hierárquica de assuntos."""
+
+    codigo: int
+    nome: str
+    nivel: int
+    filhos: list["AssuntoNode"] = []

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TopBar } from '../components/layout/TopBar'
 import { FilterBar } from '../components/filters/FilterBar'
+import { TreeSelectFilter } from '../components/filters/TreeSelectFilter'
 import { KPIGrid } from '../components/data/KPIGrid'
 import { LineChartCard } from '../components/charts/LineChartCard'
 import { BarChartCard } from '../components/charts/BarChartCard'
@@ -11,6 +12,8 @@ import {
   useProcessosPorGrupo,
   useProcessosLista,
 } from '../api/hooks/useProcessos'
+import { useAssuntosTree } from '../api/hooks/useFilters'
+import { useFilterStore } from '../stores/useFilterStore'
 import type { PaginationParams } from '../types'
 
 const TABLE_COLUMNS = [
@@ -29,16 +32,42 @@ export function ProcessosPage() {
     sort_order: 'desc',
   })
 
+  const { data: assuntosTree } = useAssuntosTree()
+  const assuntos = useFilterStore((s) => s.assuntos)
+  const setAssuntos = useFilterStore((s) => s.setAssuntos)
+
+  // Limpar filtro de assunto ao sair da página (só faz sentido aqui)
+  useEffect(() => {
+    return () => setAssuntos([])
+  }, [setAssuntos])
+
   const kpis = useProcessosKPIs()
   const timeline = useProcessosTimeline()
   const porChefia = useProcessosPorGrupo('chefia')
-  const porProcurador = useProcessosPorGrupo('procurador')
   const lista = useProcessosLista(pagination)
 
   return (
     <>
       <TopBar title="Processos Novos" />
       <FilterBar />
+      {assuntosTree && assuntosTree.length > 0 && (
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-surface px-3 py-2 sm:px-6 sm:py-2">
+          <TreeSelectFilter
+            label="Assunto"
+            tree={assuntosTree}
+            value={assuntos}
+            onChange={setAssuntos}
+          />
+          {assuntos.length > 0 && (
+            <button
+              onClick={() => setAssuntos([])}
+              className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 transition-colors"
+            >
+              Limpar assunto
+            </button>
+          )}
+        </div>
+      )}
       <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
         <KPIGrid data={kpis.data} isLoading={kpis.isLoading} isError={kpis.isError} />
 
@@ -49,20 +78,12 @@ export function ProcessosPage() {
           isError={timeline.isError}
         />
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <BarChartCard
-            title="Processos Novos — Por Chefia"
-            data={porChefia.data}
-            isLoading={porChefia.isLoading}
-            isError={porChefia.isError}
-          />
-          <BarChartCard
-            title="Processos Novos — Por Procurador"
-            data={porProcurador.data}
-            isLoading={porProcurador.isLoading}
-            isError={porProcurador.isError}
-          />
-        </div>
+        <BarChartCard
+          title="Processos Novos — Por Chefia"
+          data={porChefia.data}
+          isLoading={porChefia.isLoading}
+          isError={porChefia.isError}
+        />
 
         <DataTable
           data={lista.data}

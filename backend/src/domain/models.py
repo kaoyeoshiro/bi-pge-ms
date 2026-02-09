@@ -7,7 +7,10 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
+    ForeignKey,
     Index,
+    Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -27,6 +30,7 @@ class ProcessoNovo(Base):
     __tablename__ = "processos_novos"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    cd_processo: Mapped[str | None] = mapped_column(String(50))
     chefia: Mapped[str | None] = mapped_column(String(200))
     data: Mapped[datetime | None]
     codigo_processo: Mapped[str | None] = mapped_column(String(50))
@@ -41,6 +45,7 @@ class PecaElaborada(Base):
     __tablename__ = "pecas_elaboradas"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    cd_documento: Mapped[int | None] = mapped_column(BigInteger)
     chefia: Mapped[str | None] = mapped_column(String(200))
     data: Mapped[datetime | None]
     usuario_criacao: Mapped[str | None] = mapped_column(String(300))
@@ -75,6 +80,7 @@ class PecaFinalizada(Base):
     __tablename__ = "pecas_finalizadas"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    cd_documento: Mapped[int | None] = mapped_column(BigInteger)
     chefia: Mapped[str | None] = mapped_column(String(200))
     data_finalizacao: Mapped[datetime | None]
     usuario_finalizacao: Mapped[str | None] = mapped_column(String(300))
@@ -152,6 +158,41 @@ class HiddenProcuradorProducao(Base):
             "is_active",
         ),
         CheckConstraint("start_date <= end_date", name="ck_start_before_end"),
+    )
+
+
+class Assunto(Base):
+    """Árvore hierárquica de assuntos jurídicos (até 9 níveis)."""
+
+    __tablename__ = "assuntos"
+
+    codigo: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    codigo_pai: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("assuntos.codigo"), index=True
+    )
+    nome: Mapped[str | None] = mapped_column(String(500))
+    descricao: Mapped[str | None] = mapped_column(Text)
+    nivel: Mapped[int | None] = mapped_column(SmallInteger)
+    numero_fmt: Mapped[str | None] = mapped_column(String(50))
+
+
+class ProcessoAssunto(Base):
+    """Vínculo N:N entre processos e assuntos."""
+
+    __tablename__ = "processo_assuntos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    numero_processo: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    codigo_assunto: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assuntos.codigo"), nullable=False
+    )
+    assunto_principal: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+
+    __table_args__ = (
+        Index("idx_proc_assuntos_numero", "numero_processo"),
+        Index("idx_proc_assuntos_assunto", "codigo_assunto"),
     )
 
 

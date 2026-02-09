@@ -41,7 +41,6 @@ export function FilterBar() {
         value={store.areas}
         onChange={store.setAreas}
       />
-
       <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
         <input
           type="date"

@@ -1,17 +1,20 @@
 import { useState, useMemo } from 'react'
 import { TopBar } from '../components/layout/TopBar'
 import { PageFilterBar } from '../components/filters/PageFilterBar'
+import { TreeSelectFilter } from '../components/filters/TreeSelectFilter'
 import { FilterParamsProvider } from '../api/hooks/useFilterParams'
+import type { FilterParams } from '../api/hooks/useFilterParams'
 import { KPIGrid } from '../components/data/KPIGrid'
 import { LineChartCard } from '../components/charts/LineChartCard'
 import { BarChartCard } from '../components/charts/BarChartCard'
+import { AssuntoDrilldownCard } from '../components/charts/AssuntoDrilldownCard'
 import { DataTable } from '../components/data/DataTable'
 import { Card } from '../components/ui/Card'
 import { Spinner } from '../components/ui/Spinner'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorAlert } from '../components/ui/ErrorAlert'
 import { SelectFilter } from '../components/filters/SelectFilter'
-import { useCargaReduzida, useFilterOptions } from '../api/hooks/useFilters'
+import { useCargaReduzida, useFilterOptions, useAssuntosTree } from '../api/hooks/useFilters'
 import {
   usePerfilKPIs,
   usePerfilTimeline,
@@ -26,10 +29,16 @@ import { usePageFilters } from '../hooks/usePageFilters'
 import { formatNumber, formatDecimal } from '../utils/formatters'
 import type { PaginationParams, ProcuradorComparativo } from '../types'
 
-/** Opções de tabela para detalhamento — procurador/chefia. */
-const TABELA_OPTIONS_PROCURADOR = [
+/** Opções de tabela para detalhamento — chefia (inclui processos novos). */
+const TABELA_OPTIONS_CHEFIA = [
   { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
   { value: 'processos_novos', label: 'Processos Novos' },
+  { value: 'pendencias', label: 'Pendências' },
+] as const
+
+/** Opções de tabela para detalhamento — procurador (sem processos novos). */
+const TABELA_OPTIONS_PROCURADOR = [
+  { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
   { value: 'pendencias', label: 'Pendências' },
 ] as const
 
@@ -37,7 +46,6 @@ const TABELA_OPTIONS_PROCURADOR = [
 const TABELA_OPTIONS_ASSESSOR = [
   { value: 'pecas_elaboradas', label: 'Peças Elaboradas' },
   { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
-  { value: 'processos_novos', label: 'Processos Novos' },
   { value: 'pendencias', label: 'Pendências' },
 ] as const
 
@@ -85,11 +93,10 @@ const TABLE_COLUMNS: Record<string, { key: string; label: string; type?: string 
 
 // --- Comparativo entre Procuradores ---
 
-type SortKey = keyof Pick<ProcuradorComparativo, 'procurador' | 'pecas_finalizadas' | 'processos_novos' | 'pendencias' | 'total'>
+type SortKey = keyof Pick<ProcuradorComparativo, 'procurador' | 'pecas_finalizadas' | 'pendencias' | 'total'>
 
 const METRIC_COLS: { key: SortKey; label: string; short: string; color: string }[] = [
   { key: 'pecas_finalizadas', label: 'Peças Finalizadas', short: 'Final.', color: '#2E7D32' },
-  { key: 'processos_novos', label: 'Processos Novos', short: 'Proc.', color: '#D4A843' },
   { key: 'pendencias', label: 'Pendências', short: 'Pend.', color: '#C62828' },
   { key: 'total', label: 'Total', short: 'Total', color: '#1565C0' },
 ]
@@ -149,7 +156,7 @@ function ComparativoProcuradoresCard({
 
   return (
     <Card title={`Comparativo entre Procuradores (${sorted.length})`}>
-      <p className="text-xs text-gray-400 mb-3 -mt-1">Métricas de procurador: finalizadas, processos novos e pendências atribuídas ao responsável pelo caso</p>
+      <p className="text-xs text-gray-400 mb-3 -mt-1">Métricas de procurador: peças finalizadas e pendências atribuídas ao responsável</p>
       <div className="overflow-auto max-h-[50vh]">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-white z-10 border-b border-gray-200">
@@ -229,14 +236,58 @@ export interface PerfilPageProps {
  * dentro de PerfilPageContent usem os filtros locais (ano, data).
  */
 export function PerfilPage(props: PerfilPageProps) {
-  const { params, ...filterBarProps } = usePageFilters()
+  const { params: baseParams, ...filterBarProps } = usePageFilters()
+  const isChefia = props.dimensao === 'chefia'
+
+  // Assunto: estado local, só relevante para chefia (processos_novos)
+  const [assuntos, setAssuntos] = useState<number[]>([])
+  const { data: assuntosTree } = useAssuntosTree()
+
+  const params = useMemo(() => {
+    if (!isChefia || !assuntos.length) return baseParams
+    return { ...baseParams, assunto: assuntos.join(',') } as FilterParams
+  }, [baseParams, isChefia, assuntos])
+
+  // Detectar qual assunto raiz foi selecionado (para auto-drill no card)
+  const selectedRootAssunto = useMemo(() => {
+    if (!assuntos.length || !assuntosTree) return null
+    for (const node of assuntosTree) {
+      if (assuntos.includes(node.codigo)) {
+        return { codigo: node.codigo, nome: node.nome }
+      }
+    }
+    return null
+  }, [assuntos, assuntosTree])
+
+  const handleClearAll = () => {
+    filterBarProps.clearAll()
+    setAssuntos([])
+  }
 
   return (
     <>
       <TopBar title={props.title} />
-      <PageFilterBar {...filterBarProps} />
+      <PageFilterBar {...filterBarProps} clearAll={handleClearAll} />
+      {isChefia && assuntosTree && assuntosTree.length > 0 && (
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-surface px-3 py-2 sm:px-6 sm:py-2">
+          <TreeSelectFilter
+            label="Assunto"
+            tree={assuntosTree}
+            value={assuntos}
+            onChange={setAssuntos}
+          />
+          {assuntos.length > 0 && (
+            <button
+              onClick={() => setAssuntos([])}
+              className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 transition-colors"
+            >
+              Limpar assunto
+            </button>
+          )}
+        </div>
+      )}
       <FilterParamsProvider value={params}>
-        <PerfilPageContent {...props} />
+        <PerfilPageContent {...props} filterAssunto={selectedRootAssunto} />
       </FilterParamsProvider>
     </>
   )
@@ -246,10 +297,14 @@ export function PerfilPage(props: PerfilPageProps) {
  * Conteúdo interno da página de perfil.
  * Todos os hooks de API aqui resolvem useFilterParams() via contexto local.
  */
-function PerfilPageContent({ dimensao, placeholder, options: customOptions, showProcuradorChart, showComparativoProcuradores }: PerfilPageProps) {
+function PerfilPageContent({ dimensao, placeholder, options: customOptions, showProcuradorChart, showComparativoProcuradores, filterAssunto }: PerfilPageProps & { filterAssunto?: { codigo: number; nome: string } | null }) {
   const [valor, setValor] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const tabelaOptions = dimensao === 'assessor' ? TABELA_OPTIONS_ASSESSOR : TABELA_OPTIONS_PROCURADOR
+  const tabelaOptions = dimensao === 'assessor'
+    ? TABELA_OPTIONS_ASSESSOR
+    : dimensao === 'chefia'
+      ? TABELA_OPTIONS_CHEFIA
+      : TABELA_OPTIONS_PROCURADOR
   const [tabela, setTabela] = useState<string>(tabelaOptions[0].value)
   const [pagination, setPagination] = useState<PaginationParams>({
     page: 1,
@@ -523,8 +578,8 @@ function PerfilPageContent({ dimensao, placeholder, options: customOptions, show
             </div>
           </div>
 
-          {(groupable.categoria || groupable.modelo || showProcuradorChart) && (
-            <div className={`grid grid-cols-1 gap-6 ${(groupable.categoria && groupable.modelo) || (groupable.categoria && showProcuradorChart) || (groupable.modelo && showProcuradorChart) ? 'xl:grid-cols-2' : ''}`}>
+          {(groupable.categoria || groupable.modelo || showProcuradorChart || dimensao === 'chefia') && (
+            <div className={`grid grid-cols-1 gap-6 ${(groupable.categoria && groupable.modelo) || (groupable.categoria && showProcuradorChart) || (groupable.modelo && showProcuradorChart) || dimensao === 'chefia' ? 'xl:grid-cols-2' : ''}`}>
               {groupable.categoria && (
                 <BarChartCard
                   title={`${tabelaLabel} — Por Categoria`}
@@ -548,6 +603,15 @@ function PerfilPageContent({ dimensao, placeholder, options: customOptions, show
                   isLoading={procuradores.isLoading}
                   isError={procuradores.isError}
                   cargaReduzidaSet={crSet}
+                />
+              )}
+              {dimensao === 'chefia' && (
+                <AssuntoDrilldownCard
+                  title={`${tabelaLabel} — Por Assunto`}
+                  dimensao={dimensao}
+                  valor={valor}
+                  tabela={tabela}
+                  filterAssunto={filterAssunto}
                 />
               )}
             </div>

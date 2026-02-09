@@ -44,6 +44,7 @@ planilhas/
 *.xls
 *.csv
 migracao.log
+scripts/logs/
 
 # === Testes e cobertura ===
 .pytest_cache/

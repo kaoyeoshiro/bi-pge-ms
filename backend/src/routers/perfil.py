@@ -7,6 +7,7 @@ from src.database import get_session
 from src.dependencies import parse_global_filters, parse_pagination
 from src.domain.filters import GlobalFilters, PaginationParams
 from src.domain.schemas import (
+    AssuntoGroupCount,
     ChefiaMediasResponse,
     GroupCount,
     KPIValue,
@@ -101,6 +102,30 @@ async def get_por_procurador(
         filters.exclude_no_pendencias = False
     service = PerfilService(session)
     return await service.get_por_procurador(dimensao, valor, filters, tabela, limit)
+
+
+@router.get("/por-assunto", response_model=list[AssuntoGroupCount])
+async def get_por_assunto(
+    dimensao: str = Query(..., pattern=DIMENSAO_PATTERN),
+    valor: str = Query(..., min_length=1),
+    tabela: str = Query("processos_novos", pattern=TABELA_PATTERN),
+    limit: int = Query(15, ge=1, le=50),
+    assunto_pai: int | None = Query(None),
+    filters: GlobalFilters = Depends(parse_global_filters),
+    session: AsyncSession = Depends(get_session),
+) -> list[AssuntoGroupCount]:
+    """Ranking por assunto com drill-down hierárquico.
+
+    Retorna filhos diretos do nó `assunto_pai` (ou raízes se None),
+    cada um com total acumulado de todos os seus descendentes.
+    """
+    if dimensao in ("procurador", "assessor"):
+        filters.exclude_hidden = False
+        filters.exclude_no_pendencias = False
+    service = PerfilService(session)
+    return await service.get_por_assunto(
+        dimensao, valor, filters, tabela, limit, assunto_pai
+    )
 
 
 @router.get("/comparativo-procuradores", response_model=list[ProcuradorComparativo])

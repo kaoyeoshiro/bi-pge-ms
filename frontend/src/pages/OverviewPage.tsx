@@ -15,7 +15,6 @@ import { useCargaReduzida } from '../api/hooks/useFilters'
 const METRICA_OPTIONS = [
   { value: 'pendencias', label: 'Pendências' },
   { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
-  { value: 'processos_novos', label: 'Processos Novos' },
 ] as const
 
 export function OverviewPage() {

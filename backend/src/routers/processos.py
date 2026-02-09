@@ -43,17 +43,6 @@ async def get_por_chefia(
     return await service.get_por_chefia(filters, limit)
 
 
-@router.get("/por-procurador", response_model=list[GroupCount])
-async def get_por_procurador(
-    filters: GlobalFilters = Depends(parse_global_filters),
-    limit: int = Query(500, ge=1, le=1000),
-    session: AsyncSession = Depends(get_session),
-) -> list[GroupCount]:
-    """Ranking por procurador."""
-    service = ProcessosService(session)
-    return await service.get_por_procurador(filters, limit)
-
-
 @router.get("/lista", response_model=PaginatedResponse)
 async def list_processos(
     filters: GlobalFilters = Depends(parse_global_filters),

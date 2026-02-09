@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../client'
-import type { FilterOptions } from '../../types'
+import type { AssuntoNode, FilterOptions } from '../../types'
 
 export function useFilterOptions() {
   return useQuery<FilterOptions>({
@@ -20,6 +20,18 @@ export function useAssessores() {
     queryKey: ['assessores'],
     queryFn: async () => {
       const { data } = await api.get('/filters/assessores')
+      return data
+    },
+    staleTime: 60 * 60 * 1000,
+  })
+}
+
+/** Árvore hierárquica de assuntos vinculados a processos. */
+export function useAssuntosTree() {
+  return useQuery<AssuntoNode[]>({
+    queryKey: ['assuntos-tree'],
+    queryFn: async () => {
+      const { data } = await api.get('/filters/assuntos')
       return data
     },
     staleTime: 60 * 60 * 1000,

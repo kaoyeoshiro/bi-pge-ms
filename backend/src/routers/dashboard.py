@@ -72,10 +72,13 @@ async def get_top_procuradores(
     limit: int = Query(500, ge=1, le=1000),
     metrica: str = Query(
         "pecas_finalizadas",
-        pattern=r"^(processos_novos|pecas_finalizadas|pendencias)$",
+        pattern=r"^(pecas_finalizadas|pendencias)$",
     ),
     session: AsyncSession = Depends(get_session),
 ) -> list[GroupCount]:
-    """Retorna top N procuradores por volume da métrica selecionada."""
+    """Retorna top N procuradores por volume da métrica selecionada.
+
+    Processos novos não é métrica individual de procurador (titularidade muda).
+    """
     service = DashboardService(session)
     return await service.get_top_procuradores(filters, limit, metrica)
