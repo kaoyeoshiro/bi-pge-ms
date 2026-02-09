@@ -13,6 +13,12 @@ import {
 } from '../api/hooks/usePendencias'
 import type { PaginationParams } from '../types'
 
+const DIMENSOES = ['chefia', 'categoria'] as const
+const DIMENSAO_LABELS: Record<string, string> = {
+  chefia: 'Por Chefia',
+  categoria: 'Por Categoria',
+}
+
 const TABLE_COLUMNS = [
   { key: 'id', label: 'ID' },
   { key: 'chefia', label: 'Chefia' },
@@ -25,6 +31,7 @@ const TABLE_COLUMNS = [
 ]
 
 export function PendenciasPage() {
+  const [dimensao, setDimensao] = useState<string>('chefia')
   const [pagination, setPagination] = useState<PaginationParams>({
     page: 1,
     page_size: 25,
@@ -33,9 +40,7 @@ export function PendenciasPage() {
 
   const kpis = usePendenciasKPIs()
   const timeline = usePendenciasTimeline()
-  const porArea = usePendenciasPorGrupo('area')
-  const porCategoria = usePendenciasPorGrupo('categoria')
-  const porChefia = usePendenciasPorGrupo('chefia')
+  const ranking = usePendenciasPorGrupo(dimensao)
   const lista = usePendenciasLista(pagination)
 
   return (
@@ -52,26 +57,30 @@ export function PendenciasPage() {
           isError={timeline.isError}
         />
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <BarChartCard
-            title="Pendências — Por Área Jurídica"
-            data={porArea.data}
-            isLoading={porArea.isLoading}
-            isError={porArea.isError}
-          />
-          <BarChartCard
-            title="Pendências — Por Categoria"
-            data={porCategoria.data}
-            isLoading={porCategoria.isLoading}
-            isError={porCategoria.isError}
-          />
+        <div className="rounded-xl bg-surface shadow-sm border border-gray-100 px-3 py-2 sm:px-5 sm:py-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="text-sm font-semibold text-gray-700">Ranking por:</span>
+            {DIMENSOES.map((dim) => (
+              <button
+                key={dim}
+                onClick={() => setDimensao(dim)}
+                className={`rounded-lg px-4 py-1.5 text-sm transition-colors ${
+                  dimensao === dim
+                    ? 'bg-primary text-white font-medium shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {DIMENSAO_LABELS[dim]}
+              </button>
+            ))}
+          </div>
         </div>
 
         <BarChartCard
-          title="Pendências — Por Chefia"
-          data={porChefia.data}
-          isLoading={porChefia.isLoading}
-          isError={porChefia.isError}
+          title={`Pendências — ${DIMENSAO_LABELS[dimensao]}`}
+          data={ranking.data}
+          isLoading={ranking.isLoading}
+          isError={ranking.isError}
         />
 
         <DataTable

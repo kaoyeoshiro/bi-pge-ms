@@ -8,12 +8,11 @@ import { DataTable } from '../components/data/DataTable'
 import { useProducaoKPIs, useProducaoTimeline, useProducaoPorGrupo, useProducaoLista } from '../api/hooks/useProducao'
 import type { PaginationParams } from '../types'
 
-const DIMENSOES = ['procurador', 'chefia', 'categoria', 'usuario'] as const
+const DIMENSOES = ['chefia', 'procurador', 'categoria'] as const
 const DIMENSAO_LABELS: Record<string, string> = {
-  procurador: 'Por Procurador',
   chefia: 'Por Chefia',
+  procurador: 'Por Procurador',
   categoria: 'Por Categoria',
-  usuario: 'Por Usuário',
 }
 
 const TABLE_COLUMNS = [
@@ -27,7 +26,7 @@ const TABLE_COLUMNS = [
 ]
 
 export function ProducaoPage() {
-  const [dimensao, setDimensao] = useState<string>('procurador')
+  const [dimensao, setDimensao] = useState<string>('chefia')
   const [pagination, setPagination] = useState<PaginationParams>({
     page: 1,
     page_size: 25,
