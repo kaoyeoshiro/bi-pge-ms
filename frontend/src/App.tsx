@@ -4,6 +4,7 @@ import { OverviewPage } from './pages/OverviewPage'
 import { ProducaoPage } from './pages/ProducaoPage'
 import { PendenciasPage } from './pages/PendenciasPage'
 import { ProcessosPage } from './pages/ProcessosPage'
+import { AssuntosPage } from './pages/AssuntosPage'
 import { ComparativosPage } from './pages/ComparativosPage'
 import { ExplorerPage } from './pages/ExplorerPage'
 import { PerfilProcuradorPage } from './pages/PerfilProcuradorPage'
@@ -19,6 +20,7 @@ function App() {
         <Route path="/producao" element={<ProducaoPage />} />
         <Route path="/pendencias" element={<PendenciasPage />} />
         <Route path="/processos" element={<ProcessosPage />} />
+        <Route path="/assuntos" element={<AssuntosPage />} />
         <Route path="/perfil-procurador" element={<PerfilProcuradorPage />} />
         <Route path="/perfil-chefia" element={<PerfilChefiaPage />} />
         <Route path="/perfil-assessor" element={<PerfilAssessorPage />} />
