@@ -73,6 +73,14 @@ export interface AssuntoGroupCount extends GroupCount {
   has_children: boolean
 }
 
+export interface AssuntoResumo {
+  nome: string
+  codigo: number
+  kpis: KPIValue[]
+  top_filhos: GroupCount[]
+  timeline: TimelineSeries[]
+}
+
 // --- Médias Chefia ---
 
 export interface ChefiaMediaKPI {
