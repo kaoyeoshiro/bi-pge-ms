@@ -27,6 +27,8 @@ import {
   useChefiaMedias,
 } from '../api/hooks/usePerfil'
 import { usePageFilters } from '../hooks/usePageFilters'
+import { useFilterParams } from '../api/hooks/useFilterParams'
+import { buildQueryString } from '../api/client'
 import { formatNumber, formatDecimal } from '../utils/formatters'
 import type { PaginationParams, ProcuradorComparativo } from '../types'
 
@@ -43,11 +45,10 @@ const TABELA_OPTIONS_PROCURADOR = [
   { value: 'pendencias', label: 'Pendências' },
 ] as const
 
-/** Opções de tabela para detalhamento — assessor (inclui elaboradas). */
+/** Opções de tabela para detalhamento — assessor (sem pendências). */
 const TABELA_OPTIONS_ASSESSOR = [
   { value: 'pecas_elaboradas', label: 'Peças Elaboradas' },
   { value: 'pecas_finalizadas', label: 'Peças Finalizadas' },
-  { value: 'pendencias', label: 'Pendências' },
 ] as const
 
 /** Mapa de colunas de agrupamento disponíveis por tabela. */
@@ -219,6 +220,29 @@ function ComparativoProcuradoresCard({
   )
 }
 
+/** Botão de exportação do relatório Excel de assuntos da chefia. */
+function ExportAssuntosButton({ valor }: { valor: string }) {
+  const params = useFilterParams()
+
+  const handleExport = () => {
+    const qs = buildQueryString({ ...params, valor })
+    window.open(`/api/perfil/export-assuntos-excel${qs}`, '_blank')
+  }
+
+  return (
+    <button
+      onClick={handleExport}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+        <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+        <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+      </svg>
+      Relatório de Assuntos
+    </button>
+  )
+}
+
 export interface PerfilPageProps {
   title: string
   dimensao: 'procurador' | 'chefia' | 'assessor'
@@ -262,7 +286,7 @@ export function PerfilPage(props: PerfilPageProps) {
 
   return (
     <>
-      <TopBar title={props.title} />
+      {props.title && <TopBar title={props.title} />}
       <PageFilterBar {...filterBarProps} clearAll={handleClearAll} />
       {isChefia && assuntosTree && assuntosTree.length > 0 && (
         <div className="flex items-center gap-2 border-b border-gray-200 bg-surface px-3 py-2 sm:px-6 sm:py-2">
@@ -396,12 +420,17 @@ function PerfilPageContent({ dimensao, placeholder, options: customOptions, show
           )}
         </div>
         {valor && (
-          <button
-            onClick={() => { setValor(null); setSearch('') }}
-            className="mt-2 text-xs text-blue-600 hover:underline"
-          >
-            Limpar seleção
-          </button>
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              onClick={() => { setValor(null); setSearch('') }}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Limpar seleção
+            </button>
+            {dimensao === 'chefia' && (
+              <ExportAssuntosButton valor={valor} />
+            )}
+          </div>
         )}
       </div>
 

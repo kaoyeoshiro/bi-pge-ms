@@ -106,6 +106,13 @@ export interface ProcuradorComparativo {
   total: number
 }
 
+export interface AssessorComparativo {
+  assessor: string
+  pecas_elaboradas: number
+  pecas_finalizadas: number
+  total: number
+}
+
 // --- Admin ---
 
 export interface UserRoleItem {
@@ -170,6 +177,14 @@ export interface HiddenProcuradorUpdate {
 }
 
 // --- Assuntos ---
+
+export interface AssuntoResumo {
+  nome: string
+  codigo: number
+  kpis: KPIValue[]
+  top_filhos: GroupCount[]
+  timeline: TimelineSeries[]
+}
 
 export interface AssuntoNode {
   codigo: number

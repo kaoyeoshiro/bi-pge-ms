@@ -1,49 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { useAssuntoSearch, useAssuntoPath } from '../../api/hooks/useAssuntoExplorer'
-import { AssuntoHierarchy } from '../assuntos/AssuntoHierarchy'
+import { useAssuntoSearch } from '../../api/hooks/useAssuntoExplorer'
 import type { AssuntoNode } from '../../types'
 
 interface AssuntoAutocompleteProps {
   value: AssuntoNode[]
   onChange: (assuntos: AssuntoNode[]) => void
   placeholder?: string
-}
-
-interface AssuntoChipProps {
-  assunto: AssuntoNode
-  onRemove: (codigo: number) => void
-}
-
-/**
- * Chip de assunto selecionado com hierarquia em tooltip.
- */
-function AssuntoChip({ assunto, onRemove }: AssuntoChipProps) {
-  const { data: path } = useAssuntoPath(assunto.codigo)
-  const hierarchyText = path?.map((n) => n.nome).join(' > ') || assunto.nome
-
-  return (
-    <span
-      className="group inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
-      title={hierarchyText}
-    >
-      <span className="max-w-[200px] truncate">{assunto.nome}</span>
-      <button
-        type="button"
-        onClick={() => onRemove(assunto.codigo)}
-        className="hover:text-primary-dark transition-colors"
-        title="Remover"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className="h-3 w-3"
-        >
-          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-        </svg>
-      </button>
-    </span>
-  )
 }
 
 /**
@@ -148,11 +110,27 @@ export function AssuntoAutocomplete({
         <div className="flex min-h-[30px] flex-wrap items-center gap-1 rounded border border-gray-300 px-2 py-1 focus-within:border-primary">
           {/* Chips dos assuntos selecionados */}
           {value.map((assunto) => (
-            <AssuntoChip
+            <span
               key={assunto.codigo}
-              assunto={assunto}
-              onRemove={handleRemove}
-            />
+              className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
+            >
+              <span className="max-w-[200px] truncate">{assunto.nome}</span>
+              <button
+                type="button"
+                onClick={() => handleRemove(assunto.codigo)}
+                className="hover:text-primary-dark transition-colors"
+                title="Remover"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3 w-3"
+                >
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+              </button>
+            </span>
           ))}
 
           {/* Input de busca */}
@@ -199,7 +177,7 @@ export function AssuntoAutocomplete({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 mt-1 max-h-[400px] w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
+          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
         >
           {availableAssuntos && availableAssuntos.length > 0 ? (
             <ul className="py-1">
@@ -216,10 +194,7 @@ export function AssuntoAutocomplete({
                     }`}
                   >
                     <div className="font-medium">{assunto.nome}</div>
-                    <div className="mt-1">
-                      <AssuntoHierarchy codigo={assunto.codigo} showAsTooltip />
-                    </div>
-                    <div className="mt-1 text-[10px] text-gray-400">
+                    <div className="text-[10px] text-gray-500">
                       Código: {assunto.codigo} • Nível: {assunto.nivel}
                     </div>
                   </button>

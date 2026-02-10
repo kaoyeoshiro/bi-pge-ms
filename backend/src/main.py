@@ -16,6 +16,7 @@ from src.config import settings
 from src.database import engine
 from src.routers import (
     admin,
+    assuntos,
     comparativos,
     dashboard,
     explorer,
@@ -167,6 +168,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(admin.router)
+app.include_router(assuntos.router)
 app.include_router(filters.router)
 app.include_router(dashboard.router)
 app.include_router(producao.router)
@@ -198,3 +200,4 @@ if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
         return FileResponse(STATIC_DIR / "index.html")
 else:
     logger.info("Frontend estático não encontrado — apenas API disponível.")
+
