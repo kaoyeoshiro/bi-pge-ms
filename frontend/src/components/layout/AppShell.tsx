@@ -1,6 +1,7 @@
 import { createContext, useContext, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Sidebar } from './Sidebar'
+import { AccessCounter } from '../analytics/AccessCounter'
 
 interface SidebarContextType {
   isOpen: boolean
@@ -33,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         )}
         <main className="min-w-0 flex-1 overflow-x-clip md:ml-60">{children}</main>
+        <AccessCounter />
       </div>
     </SidebarContext.Provider>
   )

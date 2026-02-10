@@ -196,6 +196,17 @@ class ProcessoAssunto(Base):
     )
 
 
+class AccessLog(Base):
+    """Registro de acessos ao sistema BI."""
+
+    __tablename__ = "access_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
+    ip_address: Mapped[str | None] = mapped_column(String(45))
+    user_agent: Mapped[str | None] = mapped_column(Text)
+
+
 # Mapeamento de nome da tabela para modelo ORM
 TABLE_MODEL_MAP: dict[str, type[Base]] = {
     "processos_novos": ProcessoNovo,
