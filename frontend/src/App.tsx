@@ -9,6 +9,7 @@ import { ExplorerPage } from './pages/ExplorerPage'
 import { PerfilProcuradorPage } from './pages/PerfilProcuradorPage'
 import { PerfilChefiaPage } from './pages/PerfilChefiaPage'
 import { PerfilAssessorPage } from './pages/PerfilAssessorPage'
+import { AssuntosPage } from './pages/AssuntosPage'
 import { AdminPage } from './pages/AdminPage'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
         <Route path="/producao" element={<ProducaoPage />} />
         <Route path="/pendencias" element={<PendenciasPage />} />
         <Route path="/processos" element={<ProcessosPage />} />
+        <Route path="/assuntos" element={<AssuntosPage />} />
         <Route path="/perfil-procurador" element={<PerfilProcuradorPage />} />
         <Route path="/perfil-chefia" element={<PerfilChefiaPage />} />
         <Route path="/perfil-assessor" element={<PerfilAssessorPage />} />

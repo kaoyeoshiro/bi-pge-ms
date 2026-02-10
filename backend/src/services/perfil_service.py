@@ -23,6 +23,7 @@ from src.domain.models import (
     UserRole,
 )
 from src.domain.schemas import (
+    AssessorComparativo,
     AssuntoGroupCount,
     ChefiaMediaKPI,
     ChefiaMediasResponse,
@@ -85,12 +86,12 @@ class PerfilService:
         Chefia: processos_novos, pecas_finalizadas, pendencias.
         Procurador: pecas_finalizadas, pendencias (sem processos_novos —
             titularidade muda ao longo do tempo, distorcendo a atribuição).
-        Assessor: pecas_elaboradas, pecas_finalizadas, pendencias.
+        Assessor: pecas_elaboradas, pecas_finalizadas (sem pendencias —
+            assessores não pegam pendências).
         """
         f = self._build_filters(dimensao, valor, filters)
 
         finalizadas = await self.repos["pecas_finalizadas"].total_count(f)
-        pendencias = await self.repos["pendencias"].total_count(f)
 
         kpis: list[KPIValue] = []
 
@@ -105,7 +106,11 @@ class PerfilService:
             kpis.append(KPIValue(label="Peças Elaboradas", valor=elaboradas))
 
         kpis.append(KPIValue(label="Peças Finalizadas", valor=finalizadas))
-        kpis.append(KPIValue(label="Pendências", valor=pendencias))
+
+        # Pendências: apenas para chefia e procurador (assessores não pegam)
+        if dimensao != "assessor":
+            pendencias = await self.repos["pendencias"].total_count(f)
+            kpis.append(KPIValue(label="Pendências", valor=pendencias))
 
         return kpis
 
@@ -127,7 +132,9 @@ class PerfilService:
         if dimensao == "assessor":
             labels["pecas_elaboradas"] = "Peças Elaboradas"
         labels["pecas_finalizadas"] = "Peças Finalizadas"
-        labels["pendencias"] = "Pendências"
+        # Pendências: apenas para chefia e procurador
+        if dimensao != "assessor":
+            labels["pendencias"] = "Pendências"
 
         series = []
         for table_name, label in labels.items():
@@ -482,6 +489,115 @@ class PerfilService:
             "Comparativo finalizado: %d procuradores, top 3: %s",
             len(comparativo),
             [(c.procurador, c.total) for c in comparativo[:3]],
+        )
+
+        return comparativo
+
+    @cached(ttl=300)
+    async def get_comparativo_assessores(
+        self, chefia: str, filters: GlobalFilters
+    ) -> list[AssessorComparativo]:
+        """Comparativo de métricas de assessor dentro de uma chefia.
+
+        Agrupa cada tabela pela coluna de atribuição correta:
+        - pecas_elaboradas → `usuario_criacao` (quem elaborou)
+        - pecas_finalizadas → `usuario_finalizacao` (quem finalizou)
+
+        Assessores não pegam pendências.
+        """
+        f = self._build_filters("chefia", chefia, filters)
+        totais: dict[str, dict[str, int]] = defaultdict(
+            lambda: {
+                "pecas_elaboradas": 0,
+                "pecas_finalizadas": 0,
+            }
+        )
+
+        logger.info(
+            "Comparativo assessores: chefia=%s, filtros=%s",
+            chefia, f,
+        )
+
+        # Subquery: apenas nomes classificados como assessor
+        assessor_names_sq = (
+            select(UserRole.name)
+            .where(UserRole.role == "assessor")
+            .scalar_subquery()
+        )
+
+        # Peças elaboradas (usuario_criacao)
+        elab_expr = normalize_procurador_expr(PecaElaborada.usuario_criacao)
+        stmt_elab = (
+            select(
+                elab_expr.label("assessor"),
+                func.count().label("total"),
+            )
+            .select_from(PecaElaborada)
+            .where(PecaElaborada.usuario_criacao.isnot(None))
+            .where(PecaElaborada.usuario_criacao != "")
+            .where(PecaElaborada.usuario_criacao.in_(assessor_names_sq))
+            .group_by(elab_expr)
+        )
+        stmt_elab = self.repos["pecas_elaboradas"]._apply_global_filters(
+            stmt_elab, f
+        )
+
+        result_elab = await self.session.execute(stmt_elab)
+        rows_elab = result_elab.all()
+
+        logger.info(
+            "  pecas_elaboradas (usuario_criacao): %d assessores encontrados",
+            len(rows_elab),
+        )
+
+        for row in rows_elab:
+            totais[row.assessor]["pecas_elaboradas"] = row.total
+
+        # Peças finalizadas (usuario_finalizacao)
+        final_expr = normalize_procurador_expr(PecaFinalizada.usuario_finalizacao)
+        stmt_final = (
+            select(
+                final_expr.label("assessor"),
+                func.count().label("total"),
+            )
+            .select_from(PecaFinalizada)
+            .where(PecaFinalizada.usuario_finalizacao.isnot(None))
+            .where(PecaFinalizada.usuario_finalizacao != "")
+            .where(PecaFinalizada.usuario_finalizacao.in_(assessor_names_sq))
+            .group_by(final_expr)
+        )
+        stmt_final = self.repos["pecas_finalizadas"]._apply_global_filters(
+            stmt_final, f
+        )
+
+        result_final = await self.session.execute(stmt_final)
+        rows_final = result_final.all()
+
+        logger.info(
+            "  pecas_finalizadas (usuario_finalizacao): %d assessores encontrados",
+            len(rows_final),
+        )
+
+        for row in rows_final:
+            totais[row.assessor]["pecas_finalizadas"] = row.total
+
+        comparativo = []
+        for assessor, metricas in totais.items():
+            total = sum(metricas.values())
+            comparativo.append(
+                AssessorComparativo(
+                    assessor=assessor,
+                    **metricas,
+                    total=total,
+                )
+            )
+
+        comparativo.sort(key=lambda x: x.total, reverse=True)
+
+        logger.info(
+            "Comparativo assessores finalizado: %d assessores, top 3: %s",
+            len(comparativo),
+            [(c.assessor, c.total) for c in comparativo[:3]],
         )
 
         return comparativo
