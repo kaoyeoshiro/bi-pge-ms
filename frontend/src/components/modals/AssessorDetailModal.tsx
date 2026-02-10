@@ -20,10 +20,13 @@ interface AssessorDetailModalProps {
 export function AssessorDetailModal({ assessor, isOpen, onClose }: AssessorDetailModalProps) {
   const dimensao = 'assessor'
 
-  const { data: kpis, isLoading: loadingKPIs } = usePerfilKPIs(dimensao, assessor)
-  const { data: timeline, isLoading: loadingTimeline } = usePerfilTimeline(dimensao, assessor)
-  const { data: porCategoria } = usePerfilPorCategoria(dimensao, assessor, 'pecas_elaboradas', 10)
-  const { data: porModelo } = usePerfilPorModelo(dimensao, assessor, 'pecas_elaboradas', 10)
+  const { data: kpis, isLoading: loadingKPIs, isError: errorKPIs } = usePerfilKPIs(dimensao, assessor)
+  const { data: timeline, isLoading: loadingTimeline, isError: errorTimeline } = usePerfilTimeline(dimensao, assessor)
+  const { data: porCategoria, isLoading: loadingCategoria, isError: errorCategoria } = usePerfilPorCategoria(dimensao, assessor, 'pecas_elaboradas', 10)
+  const { data: porModelo, isLoading: loadingModelo, isError: errorModelo } = usePerfilPorModelo(dimensao, assessor, 'pecas_elaboradas', 10)
+
+  const isLoading = loadingKPIs || loadingTimeline
+  const hasError = errorKPIs || errorTimeline
 
   // Fechar com ESC
   useEffect(() => {
@@ -48,8 +51,6 @@ export function AssessorDetailModal({ assessor, isOpen, onClose }: AssessorDetai
   }, [isOpen])
 
   if (!isOpen) return null
-
-  const isLoading = loadingKPIs || loadingTimeline
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/50 p-4">
@@ -86,63 +87,43 @@ export function AssessorDetailModal({ assessor, isOpen, onClose }: AssessorDetai
               </div>
             )}
 
-            {!isLoading && kpis && (
+            {hasError && <ErrorAlert message="Não foi possível carregar os dados do assessor." />}
+
+            {!isLoading && !hasError && (
               <div className="space-y-6">
                 {/* KPIs */}
                 <div>
                   <h3 className="mb-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Métricas Gerais
                   </h3>
-                  <KPIGrid kpis={kpis} />
+                  <KPIGrid data={kpis} isLoading={false} isError={false} />
                 </div>
 
                 {/* Timeline */}
-                {timeline && timeline.length > 0 && (
-                  <div>
-                    <h3 className="mb-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                      Evolução Mensal
-                    </h3>
-                    <LineChartCard series={timeline} height={250} />
-                  </div>
-                )}
+                <LineChartCard
+                  title="Evolução Mensal"
+                  series={timeline}
+                  isLoading={loadingTimeline}
+                  isError={errorTimeline}
+                />
 
                 {/* Rankings lado a lado */}
                 <div className="grid gap-6 md:grid-cols-2">
-                  {porCategoria && porCategoria.length > 0 && (
-                    <div>
-                      <h3 className="mb-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                        Por Categoria
-                      </h3>
-                      <BarChartCard
-                        data={porCategoria}
-                        title=""
-                        labelKey="grupo"
-                        dataKey="total"
-                        height={300}
-                      />
-                    </div>
-                  )}
+                  <BarChartCard
+                    title="Por Categoria"
+                    data={porCategoria}
+                    isLoading={loadingCategoria}
+                    isError={errorCategoria}
+                  />
 
-                  {porModelo && porModelo.length > 0 && (
-                    <div>
-                      <h3 className="mb-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                        Por Modelo
-                      </h3>
-                      <BarChartCard
-                        data={porModelo}
-                        title=""
-                        labelKey="grupo"
-                        dataKey="total"
-                        height={300}
-                      />
-                    </div>
-                  )}
+                  <BarChartCard
+                    title="Por Modelo"
+                    data={porModelo}
+                    isLoading={loadingModelo}
+                    isError={errorModelo}
+                  />
                 </div>
               </div>
-            )}
-
-            {!isLoading && !kpis && (
-              <ErrorAlert message="Não foi possível carregar os dados do assessor." />
             )}
           </div>
         </Card>
