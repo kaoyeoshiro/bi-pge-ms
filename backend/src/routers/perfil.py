@@ -1,12 +1,14 @@
 """Router para análise individualizada de procurador ou chefia."""
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
 from src.dependencies import parse_global_filters, parse_pagination
 from src.domain.filters import GlobalFilters, PaginationParams
 from src.domain.schemas import (
+    AssessorComparativo,
     AssuntoGroupCount,
     ChefiaMediasResponse,
     GroupCount,
@@ -15,6 +17,7 @@ from src.domain.schemas import (
     ProcuradorComparativo,
     TimelineSeries,
 )
+from src.services.assunto_report_service import AssuntoReportService
 from src.services.perfil_service import PerfilService
 
 router = APIRouter(prefix="/api/perfil", tags=["Perfil Individual"])
@@ -139,6 +142,17 @@ async def get_comparativo_procuradores(
     return await service.get_comparativo_procuradores(valor, filters)
 
 
+@router.get("/comparativo-assessores", response_model=list[AssessorComparativo])
+async def get_comparativo_assessores(
+    valor: str = Query(..., min_length=1),
+    filters: GlobalFilters = Depends(parse_global_filters),
+    session: AsyncSession = Depends(get_session),
+) -> list[AssessorComparativo]:
+    """Comparativo entre assessores de uma chefia (peças elaboradas e finalizadas)."""
+    service = PerfilService(session)
+    return await service.get_comparativo_assessores(valor, filters)
+
+
 @router.get("/chefia-medias", response_model=ChefiaMediasResponse)
 async def get_chefia_medias(
     valor: str = Query(..., min_length=1),
@@ -172,3 +186,22 @@ async def get_lista(
         filters.exclude_no_pendencias = False
     service = PerfilService(session)
     return await service.get_lista(dimensao, valor, filters, tabela, pagination)
+
+
+@router.get("/export-assuntos-excel")
+async def export_assuntos_excel(
+    valor: str = Query(..., min_length=1),
+    filters: GlobalFilters = Depends(parse_global_filters),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Exporta relatório Excel completo de assuntos hierárquicos da chefia."""
+    service = AssuntoReportService(session)
+    content = await service.generate_excel(valor, filters)
+    safe_name = valor.replace("/", "-").replace("\\", "-").replace(" ", "_")
+    anos_str = "-".join(str(a) for a in filters.anos) if filters.anos else "todos"
+    filename = f"assuntos_{safe_name}_{anos_str}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
