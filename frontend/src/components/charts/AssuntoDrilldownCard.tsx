@@ -3,6 +3,7 @@ import { Card } from '../ui/Card'
 import { Spinner } from '../ui/Spinner'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorAlert } from '../ui/ErrorAlert'
+import { ClickableRow } from '../ui/ClickableRow'
 import { CHART_COLORS } from '../../utils/colors'
 import { formatNumber } from '../../utils/formatters'
 import { usePerfilPorAssunto } from '../../api/hooks/usePerfil'
@@ -100,20 +101,17 @@ export function AssuntoDrilldownCard({
           const canDrill = d.has_children
 
           return (
-            <div
+            <ClickableRow
               key={d.codigo}
-              className={canDrill ? 'cursor-pointer group' : 'group'}
-              onClick={() => canDrill && handleDrillDown(d.codigo, d.grupo)}
+              isClickable={canDrill}
+              onClick={() => handleDrillDown(d.codigo, d.grupo)}
+              ariaLabel={canDrill ? `Ver subassuntos de ${d.grupo}` : undefined}
               title={canDrill ? 'Clique para ver subassuntos' : undefined}
+              showIconAlways={true}
             >
               <div className="flex items-baseline justify-between gap-2 mb-1 sm:gap-4">
                 <span className="min-w-0 break-words text-[13px] leading-tight text-gray-700 group-hover:text-gray-900 transition-colors">
                   {d.grupo}
-                  {canDrill && (
-                    <span className="ml-1.5 text-[11px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                      &rsaquo;
-                    </span>
-                  )}
                 </span>
                 <span className="text-[13px] font-semibold text-gray-900 shrink-0 tabular-nums">
                   {formatNumber(d.total)}
@@ -124,14 +122,14 @@ export function AssuntoDrilldownCard({
               </div>
               <div className="h-5 w-full rounded bg-gray-100">
                 <div
-                  className="h-full rounded transition-all duration-300"
+                  className="h-full rounded transition-all duration-300 group-hover:shadow-sm"
                   style={{
                     width: `${(d.total / maxTotal) * 100}%`,
                     backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
                   }}
                 />
               </div>
-            </div>
+            </ClickableRow>
           )
         })}
       </div>
