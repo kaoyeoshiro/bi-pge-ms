@@ -6,29 +6,24 @@ import { ErrorAlert } from '../ui/ErrorAlert'
 import { ClickableRow } from '../ui/ClickableRow'
 import { CHART_COLORS } from '../../utils/colors'
 import { formatNumber } from '../../utils/formatters'
-import { usePerfilPorAssunto } from '../../api/hooks/usePerfil'
+import { useAssuntoDrillDown } from '../../api/hooks/useAssuntoExplorer'
 
 interface BreadcrumbItem {
   codigo: number
   nome: string
 }
 
-interface AssuntoDrilldownCardProps {
+interface AssuntoExplorerCardProps {
   title: string
-  dimensao: string
-  valor: string | null
-  tabela: string | null
   /** Quando o filtro de assunto está ativo, auto-navega para este nó com caminho completo. */
   filterAssunto?: { codigo: number; nome: string; path: { codigo: number; nome: string }[] } | null
 }
 
-export function AssuntoDrilldownCard({
-  title,
-  dimensao,
-  valor,
-  tabela,
-  filterAssunto,
-}: AssuntoDrilldownCardProps) {
+/**
+ * Card de exploração hierárquica de assuntos (drill-down).
+ * Usado na página de Explorar Assuntos (sem filtro de perfil).
+ */
+export function AssuntoExplorerCard({ title, filterAssunto }: AssuntoExplorerCardProps) {
   const [path, setPath] = useState<BreadcrumbItem[]>([])
 
   // Auto-navegar quando o filtro de assunto muda (usa caminho completo)
@@ -42,13 +37,7 @@ export function AssuntoDrilldownCard({
 
   const assuntoPai = path.length > 0 ? path[path.length - 1].codigo : null
 
-  const { data, isLoading, isError } = usePerfilPorAssunto(
-    dimensao,
-    valor,
-    tabela,
-    15,
-    assuntoPai,
-  )
+  const { data, isLoading, isError } = useAssuntoDrillDown(assuntoPai, 15)
 
   const somaTotal = useMemo(
     () => data?.reduce((acc, d) => acc + d.total, 0) ?? 0,

@@ -13,6 +13,7 @@ import { Card } from '../ui/Card'
 import { Spinner } from '../ui/Spinner'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorAlert } from '../ui/ErrorAlert'
+import { ClickableRow } from '../ui/ClickableRow'
 import { CHART_COLORS } from '../../utils/colors'
 import { formatNumber } from '../../utils/formatters'
 import type { GroupCount } from '../../types'
@@ -87,10 +88,13 @@ function HorizontalBars({
     <Card title={title}>
       <div className="space-y-3">
         {visibleData.map((d, i) => (
-          <div
+          <ClickableRow
             key={d.grupo}
-            className={onClick ? 'cursor-pointer group' : 'group'}
+            isClickable={!!onClick}
             onClick={() => onClick?.(d.grupo)}
+            ariaLabel={onClick ? `Ver detalhes de ${d.grupo}` : undefined}
+            title={onClick ? 'Clique para ver detalhes' : undefined}
+            showIconAlways={!!onClick}
           >
             <div className="flex items-baseline justify-between gap-2 mb-1 sm:gap-4">
               <span className="min-w-0 break-words text-[13px] leading-tight text-gray-700 group-hover:text-gray-900 transition-colors">
@@ -112,14 +116,14 @@ function HorizontalBars({
             </div>
             <div className="h-5 w-full rounded bg-gray-100">
               <div
-                className="h-full rounded transition-all duration-300"
+                className="h-full rounded transition-all duration-300 group-hover:shadow-sm"
                 style={{
                   width: `${(d.total / maxTotal) * 100}%`,
                   backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
                 }}
               />
             </div>
-          </div>
+          </ClickableRow>
         ))}
       </div>
 
