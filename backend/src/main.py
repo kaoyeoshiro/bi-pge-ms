@@ -215,3 +215,4 @@ if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
         return FileResponse(STATIC_DIR / "index.html")
 else:
     logger.info("Frontend estático não encontrado — apenas API disponível.")
+

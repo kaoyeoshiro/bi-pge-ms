@@ -19,12 +19,9 @@ export function AccessCounter() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/90 px-3 py-2 text-sm shadow-lg backdrop-blur-sm md:bottom-6 md:left-6">
-      <Eye className="size-4 text-zinc-400" />
-      <span className="text-zinc-300">
-        <span className="font-semibold text-zinc-100">{totalAccesses.toLocaleString('pt-BR')}</span>
-        {' acessos'}
-      </span>
+    <div className="fixed bottom-3 left-3 z-50 flex items-center gap-1.5 text-xs text-zinc-500">
+      <Eye className="size-3.5" />
+      <span>{totalAccesses.toLocaleString('pt-BR')}</span>
     </div>
   )
 }

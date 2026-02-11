@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAssuntoSearch, useAssuntoPath } from '../../api/hooks/useAssuntoExplorer'
-import { AssuntoHierarchy } from '../assuntos/AssuntoHierarchy'
 import type { AssuntoNode } from '../../types'
 
 interface AssuntoAutocompleteProps {
@@ -43,6 +42,20 @@ function AssuntoChip({ assunto, onRemove }: AssuntoChipProps) {
         </svg>
       </button>
     </span>
+  )
+}
+
+/**
+ * Mostra hierarquia do assunto inline.
+ */
+function AssuntoPathInline({ codigo }: { codigo: number }) {
+  const { data: path } = useAssuntoPath(codigo)
+  if (!path || path.length <= 1) return null
+
+  return (
+    <div className="text-[10px] text-gray-500">
+      {path.slice(0, -1).map((n) => n.nome).join(' > ')}
+    </div>
   )
 }
 
@@ -217,7 +230,7 @@ export function AssuntoAutocomplete({
                   >
                     <div className="font-medium">{assunto.nome}</div>
                     <div className="mt-1">
-                      <AssuntoHierarchy codigo={assunto.codigo} showAsTooltip />
+                      <AssuntoPathInline codigo={assunto.codigo} />
                     </div>
                     <div className="mt-1 text-[10px] text-gray-400">
                       Código: {assunto.codigo} • Nível: {assunto.nivel}
