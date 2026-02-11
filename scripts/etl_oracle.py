@@ -4,14 +4,14 @@ Extrai dados do Oracle SAJ/SPJMS via túnel SSH e carrega no PostgreSQL
 local com upsert (ON CONFLICT) para carga incremental.
 
 Uso:
-    # Carga incremental (últimos 30 dias)
+    # Carga incremental (últimos 30 dias) + assuntos
     python scripts/etl_oracle.py
 
-    # Carga completa desde o início
+    # Carga completa desde o início + assuntos
     python scripts/etl_oracle.py --full
 
-    # Somente assuntos
-    python scripts/etl_oracle.py --assuntos
+    # Sem assuntos (só as 4 tabelas principais)
+    python scripts/etl_oracle.py --no-assuntos
 
     # Tabela específica
     python scripts/etl_oracle.py --tables processos_novos pecas_finalizadas
@@ -72,9 +72,9 @@ def _parse_args() -> argparse.Namespace:
         help="Tabelas a processar (padrão: todas)",
     )
     parser.add_argument(
-        "--assuntos",
+        "--no-assuntos",
         action="store_true",
-        help="Extrair e carregar árvore de assuntos e vínculos processo-assunto",
+        help="Pular extração de assuntos e vínculos processo-assunto (padrão: inclui)",
     )
     return parser.parse_args()
 
@@ -129,8 +129,8 @@ def main() -> None:
                     table, total, pg_count, pk_count,
                 )
 
-            # Assuntos (se solicitado)
-            if args.assuntos:
+            # Assuntos (incluído por padrão, pular com --no-assuntos)
+            if not args.no_assuntos:
                 logger.info("=" * 60)
                 logger.info("Processando: assuntos")
 

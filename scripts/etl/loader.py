@@ -201,7 +201,11 @@ class PostgresLoader:
         return len(values_list)
 
     def upsert_assuntos(self, assuntos: list[dict]) -> int:
-        """Insere ou atualiza assuntos na tabela assuntos."""
+        """Insere ou atualiza assuntos na tabela assuntos.
+
+        Desabilita temporariamente a FK de auto-referência (codigo_pai)
+        para permitir inserção em qualquer ordem.
+        """
         if not assuntos:
             return 0
 
@@ -218,7 +222,9 @@ class PostgresLoader:
         """
 
         with conn.cursor() as cur:
+            cur.execute("ALTER TABLE assuntos DISABLE TRIGGER ALL")
             psycopg2.extras.execute_batch(cur, sql, assuntos, page_size=1000)
+            cur.execute("ALTER TABLE assuntos ENABLE TRIGGER ALL")
         conn.commit()
 
         logger.info("  %d assuntos upserted.", len(assuntos))
