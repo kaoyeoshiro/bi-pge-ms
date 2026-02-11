@@ -26,13 +26,12 @@ INSTANT_CLIENT_DIR = Path(r"C:\oracle\instantclient_21_20")
 
 def _init_thick_mode() -> None:
     """Inicializa o oracledb em thick mode (necessário para Oracle 11g)."""
-    if not oracledb.is_thin_mode():
-        lib_dir = str(INSTANT_CLIENT_DIR) if INSTANT_CLIENT_DIR.exists() else None
-        try:
-            oracledb.init_oracle_client(lib_dir=lib_dir)
-            logger.info("oracledb inicializado em thick mode (lib_dir=%s).", lib_dir)
-        except oracledb.exceptions.ProgrammingError:
-            # Já inicializado — ignorar
+    lib_dir = str(INSTANT_CLIENT_DIR) if INSTANT_CLIENT_DIR.exists() else None
+    try:
+        oracledb.init_oracle_client(lib_dir=lib_dir)
+        logger.info("oracledb inicializado em thick mode (lib_dir=%s).", lib_dir)
+    except oracledb.exceptions.ProgrammingError:
+        # Já inicializado — ignorar
             pass
 
 
