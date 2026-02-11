@@ -10,7 +10,6 @@ import { ExplorerPage } from './pages/ExplorerPage'
 import { PerfilProcuradorPage } from './pages/PerfilProcuradorPage'
 import { PerfilChefiaPage } from './pages/PerfilChefiaPage'
 import { PerfilAssessorPage } from './pages/PerfilAssessorPage'
-import { AssuntosPage } from './pages/AssuntosPage'
 import { AdminPage } from './pages/AdminPage'
 
 function App() {

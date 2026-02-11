@@ -70,19 +70,6 @@ class ProcuradorComparativo(BaseModel):
     total: int = 0
 
 
-class AssessorComparativo(BaseModel):
-    """Métricas de assessor para comparativo dentro de uma chefia.
-
-    Peças elaboradas (usuario_criacao) e finalizadas (usuario_finalizacao).
-    Assessores não pegam pendências.
-    """
-
-    assessor: str
-    pecas_elaboradas: int = 0
-    pecas_finalizadas: int = 0
-    total: int = 0
-
-
 class ColumnSchema(BaseModel):
     """Schema de uma coluna para o Data Explorer."""
 
@@ -169,16 +156,6 @@ class AssuntoGroupCount(GroupCount):
 
     codigo: int
     has_children: bool
-
-
-class AssuntoResumoResponse(BaseModel):
-    """Resumo completo de um nó de assunto com KPIs cross-table."""
-
-    nome: str
-    codigo: int
-    kpis: list[KPIValue]
-    top_filhos: list[GroupCount]
-    timeline: list[TimelineSeries]
 
 
 class AssuntoNode(BaseModel):

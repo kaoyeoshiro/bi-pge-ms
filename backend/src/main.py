@@ -16,6 +16,7 @@ from src.config import settings
 from src.database import engine
 from src.routers import (
     admin,
+    analytics,
     assuntos,
     comparativos,
     dashboard,
@@ -121,6 +122,19 @@ async def _ensure_auxiliary_tables() -> None:
                     CREATE INDEX IF NOT EXISTS idx_assuntos_pai
                     ON assuntos(codigo_pai)
                 """))
+                # Tabela de log de acessos
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS access_logs (
+                        id SERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP DEFAULT NOW(),
+                        ip_address VARCHAR(45),
+                        user_agent TEXT
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_access_logs_timestamp
+                    ON access_logs(timestamp DESC)
+                """))
             logger.info("Tabelas auxiliares verificadas.")
             return
         except Exception as exc:
@@ -168,6 +182,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(admin.router)
+app.include_router(analytics.router)
 app.include_router(assuntos.router)
 app.include_router(filters.router)
 app.include_router(dashboard.router)

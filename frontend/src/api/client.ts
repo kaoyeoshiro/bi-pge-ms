@@ -24,4 +24,5 @@ export function buildQueryString(
   return qs ? `?${qs}` : ''
 }
 
+export { api }
 export default api

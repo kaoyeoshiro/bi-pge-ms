@@ -162,23 +162,6 @@ export function useComparativoProcuradores(valor: string | null) {
   })
 }
 
-/** Comparativo entre assessores de uma chefia. */
-export function useComparativoAssessores(
-  chefia: string,
-  params: Record<string, string | string[]>
-) {
-  return useQuery({
-    queryKey: ['perfil-comparativo-assessores', chefia, params],
-    queryFn: async () => {
-      const { data } = await api.get(
-        `/perfil/comparativo-assessores${buildQueryString({ ...params, valor: chefia })}`
-      )
-      return data
-    },
-    enabled: !!chefia,
-  })
-}
-
 /** Lista paginada de registros do indivíduo em uma tabela. */
 export function usePerfilLista(
   dimensao: string,
