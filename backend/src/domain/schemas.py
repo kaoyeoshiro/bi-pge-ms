@@ -165,3 +165,13 @@ class AssuntoNode(BaseModel):
     nome: str
     nivel: int
     filhos: list["AssuntoNode"] = []
+
+
+class AssuntoResumoResponse(BaseModel):
+    """Resumo completo de um nó de assunto: KPIs, filhos e timeline."""
+
+    nome: str
+    codigo: int
+    kpis: dict[str, KPIValue]
+    top_filhos: list[AssuntoGroupCount] = []
+    timeline: list[TimelineSeries] = []
