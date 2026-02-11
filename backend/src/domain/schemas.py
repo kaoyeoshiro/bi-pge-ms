@@ -70,6 +70,19 @@ class ProcuradorComparativo(BaseModel):
     total: int = 0
 
 
+class AssessorComparativo(BaseModel):
+    """Métricas de assessor para comparativo dentro de uma chefia.
+
+    Peças elaboradas (usuario_criacao) e finalizadas (usuario_finalizacao).
+    Assessores não pegam pendências.
+    """
+
+    assessor: str
+    pecas_elaboradas: int = 0
+    pecas_finalizadas: int = 0
+    total: int = 0
+
+
 class ColumnSchema(BaseModel):
     """Schema de uma coluna para o Data Explorer."""
 

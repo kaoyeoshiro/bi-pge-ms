@@ -30,3 +30,9 @@ CATEGORIAS_NAO_PRODUTIVAS: frozenset[str] = frozenset({
     "Autorizações para solicitação de autos",
     "Redirecionamento",
 })
+
+# Assessores com função administrativa que não devem aparecer nas métricas
+# de produção ou assuntos.
+ASSESSORES_ADMINISTRATIVOS: frozenset[str] = frozenset({
+    "Bruno Martins Ayres Ferreira",
+})

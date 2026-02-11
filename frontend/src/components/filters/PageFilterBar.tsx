@@ -1,8 +1,12 @@
+import type { ReactNode } from 'react'
 import { SelectFilter } from './SelectFilter'
 import { useFilterOptions } from '../../api/hooks/useFilters'
 import type { PageFilterState } from '../../hooks/usePageFilters'
 
-type PageFilterBarProps = Omit<PageFilterState, 'params'>
+type PageFilterBarProps = Omit<PageFilterState, 'params'> & {
+  /** Conteúdo extra renderizado ao lado dos filtros */
+  extraActions?: ReactNode
+}
 
 /**
  * Barra de filtros para páginas com filtros próprios.
@@ -17,6 +21,7 @@ export function PageFilterBar({
   setDataInicio,
   setDataFim,
   clearAll,
+  extraActions,
 }: PageFilterBarProps) {
   const { data: options } = useFilterOptions()
 
@@ -33,6 +38,8 @@ export function PageFilterBar({
         onChange={(v) => setAnos(v.map(Number))}
         showSelectAll
       />
+
+      {extraActions}
 
       <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
         <input

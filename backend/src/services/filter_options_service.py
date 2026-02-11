@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models import Assunto, PecaElaborada, Pendencia, ProcessoAssunto, ProcessoNovo, UserRole
 from src.domain.schemas import AssuntoNode, FilterOptions
+from src.domain.constants import ASSESSORES_ADMINISTRATIVOS
 from src.services.cache import cached
 from src.services.normalization import normalize_chefia_expr, normalize_procurador_expr
 
@@ -73,7 +74,7 @@ class FilterOptionsService:
                 .order_by(UserRole.name)
             )
             result = await self.session.execute(stmt)
-            names = [str(row[0]) for row in result.all()]
+            names = [str(row[0]) for row in result.all() if row[0] not in ASSESSORES_ADMINISTRATIVOS]
             if names:
                 return names
         except Exception:
@@ -93,7 +94,7 @@ class FilterOptionsService:
             .order_by(PecaElaborada.usuario_criacao)
         )
         result = await self.session.execute(stmt)
-        return [str(row[0]) for row in result.all()]
+        return [str(row[0]) for row in result.all() if row[0] not in ASSESSORES_ADMINISTRATIVOS]
 
     async def _get_anos(self) -> list[int]:
         """Retorna anos disponíveis nos dados."""

@@ -7,7 +7,7 @@ from sqlalchemy import Column, DateTime, Integer, Select, case, func, literal, s
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
-from src.domain.constants import CATEGORIAS_NAO_PRODUTIVAS
+from src.domain.constants import ASSESSORES_ADMINISTRATIVOS, CATEGORIAS_NAO_PRODUTIVAS
 from src.domain.enums import Granularity
 from src.domain.filters import GlobalFilters, PaginationParams
 from src.domain.models import HiddenProcuradorProducao, PecaFinalizada, Pendencia, ProcessoAssunto, UserRole
@@ -137,6 +137,19 @@ class BaseRepository:
         if self.model is PecaFinalizada:
             stmt = stmt.where(
                 PecaFinalizada.categoria.notin_(CATEGORIAS_NAO_PRODUTIVAS)
+            )
+
+        # Excluir registros de assessores administrativos (trabalho não-jurídico)
+        assessor_col_name = ASSESSOR_COL_MAP.get(self.model.__tablename__)
+        if assessor_col_name and hasattr(self.model, assessor_col_name):
+            assessor_col = getattr(self.model, assessor_col_name)
+            stmt = stmt.where(
+                or_(
+                    assessor_col.is_(None),
+                    normalize_procurador_expr(assessor_col).notin_(
+                        list(ASSESSORES_ADMINISTRATIVOS)
+                    ),
+                )
             )
 
         # Excluir produção oculta por regras administrativas
