@@ -59,3 +59,23 @@ export function formatCompactNumber(value: number): string {
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
   return value.toString()
 }
+
+const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+export function formatCurrency(value: number): string {
+  if (value >= 1_000_000_000_000) {
+    return `R$ ${(value / 1_000_000_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} tri`
+  }
+  if (value >= 1_000_000_000) {
+    return `R$ ${(value / 1_000_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} bi`
+  }
+  if (value >= 1_000_000) {
+    return `R$ ${(value / 1_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} mi`
+  }
+  return currencyFormatter.format(value)
+}

@@ -11,6 +11,7 @@ import { PerfilProcuradorPage } from './pages/PerfilProcuradorPage'
 import { PerfilChefiaPage } from './pages/PerfilChefiaPage'
 import { PerfilAssessorPage } from './pages/PerfilAssessorPage'
 import { AdminPage } from './pages/AdminPage'
+import { PartesPage } from './pages/PartesPage'
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
         <Route path="/perfil-assessor" element={<PerfilAssessorPage />} />
         <Route path="/comparativos" element={<ComparativosPage />} />
         <Route path="/explorer" element={<ExplorerPage />} />
+        <Route path="/partes" element={<PartesPage />} />
         <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </AppShell>

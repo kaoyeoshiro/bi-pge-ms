@@ -192,3 +192,41 @@ export interface AssuntoNode {
   nivel: number
   filhos: AssuntoNode[]
 }
+
+// --- Partes / Demandantes ---
+
+export interface ParteNormalizada {
+  id: number
+  nome: string
+  cpf: string | null
+  cnpj: string | null
+  oab: string | null
+  tipo_pessoa: string | null
+  qtd_processos: number
+  qtd_contra_estado: number
+  qtd_executado_estado: number
+  qtd_advogado: number
+  qtd_coreu_estado: number
+  valor_total: number
+  valor_medio: number
+}
+
+export interface PartesKPIs {
+  total_pessoas: number
+  total_demandantes: number
+  total_executados: number
+  total_advogados: number
+  total_coreus: number
+  valor_total_causas: number
+  total_processos_com_partes: number
+}
+
+export interface ParteProcessoItem {
+  cd_processo: string
+  numero_processo: string | null
+  numero_formatado: string | null
+  nome: string
+  tipo_parte: string | null
+  polo: number | null
+  valor_acao: number | null
+}
