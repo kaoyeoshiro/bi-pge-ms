@@ -13,6 +13,8 @@ import { PerfilAssessorPage } from './pages/PerfilAssessorPage'
 import { AdminPage } from './pages/AdminPage'
 import { PartesPage } from './pages/PartesPage'
 
+const SHOW_PARTES = import.meta.env.VITE_HIDE_PARTES !== 'true'
+
 function App() {
   return (
     <AppShell>
@@ -27,7 +29,7 @@ function App() {
         <Route path="/perfil-assessor" element={<PerfilAssessorPage />} />
         <Route path="/comparativos" element={<ComparativosPage />} />
         <Route path="/explorer" element={<ExplorerPage />} />
-        <Route path="/partes" element={<PartesPage />} />
+        {SHOW_PARTES && <Route path="/partes" element={<PartesPage />} />}
         <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </AppShell>

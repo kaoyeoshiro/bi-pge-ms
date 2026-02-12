@@ -8,7 +8,6 @@ import { formatNumber, formatCurrency } from '../utils/formatters'
 import type { PaginationParams } from '../types'
 
 const ROLES = [
-  { key: null, label: 'Todos' },
   { key: 'demandante', label: 'Demandantes' },
   { key: 'executado', label: 'Executados' },
   { key: 'advogado', label: 'Advogados' },
@@ -32,11 +31,11 @@ function getRoleColumn(role: string | null) {
 }
 
 export function PartesPage() {
-  const [role, setRole] = useState<string | null>(null)
+  const [role, setRole] = useState<string | null>('demandante')
   const [pagination, setPagination] = useState<PaginationParams>({
     page: 1,
     page_size: 25,
-    sort_by: 'qtd_processos',
+    sort_by: 'qtd_contra_estado',
     sort_order: 'desc',
   })
   const [searchInput, setSearchInput] = useState('')
@@ -104,7 +103,7 @@ export function PartesPage() {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Buscar por nome, CPF, CNPJ ou OAB..."
+                placeholder="Buscar por nome..."
                 className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-primary focus:outline-none sm:max-w-md"
               />
             </div>
@@ -139,9 +138,6 @@ export function PartesPage() {
                         order={pagination.sort_order}
                         onSort={handleSort}
                       />
-                      <th className="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        CPF/CNPJ
-                      </th>
                       <SortableHeader
                         label={roleCol.label}
                         column={roleCol.key}
@@ -174,7 +170,6 @@ export function PartesPage() {
                   <tbody className="divide-y divide-gray-50">
                     {ranking.data.items.map((parte, idx) => {
                       const rowNum = (ranking.data!.page - 1) * ranking.data!.page_size + idx + 1
-                      const doc = parte.cnpj || parte.cpf || parte.oab || ''
                       const roleCount = role
                         ? (parte[roleCol.key as keyof typeof parte] as number)
                         : parte.qtd_processos
@@ -190,7 +185,6 @@ export function PartesPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">{doc}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-700 text-right font-semibold">
                             {formatNumber(roleCount)}
                           </td>

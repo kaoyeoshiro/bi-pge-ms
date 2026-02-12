@@ -5,6 +5,10 @@ FROM node:22-alpine AS frontend-build
 
 WORKDIR /app/frontend
 
+# Flag para ocultar página de Partes em produção
+ARG VITE_HIDE_PARTES=true
+ENV VITE_HIDE_PARTES=${VITE_HIDE_PARTES}
+
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
