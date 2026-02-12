@@ -188,3 +188,46 @@ class AssuntoResumoResponse(BaseModel):
     kpis: dict[str, KPIValue]
     top_filhos: list[AssuntoGroupCount] = []
     timeline: list[TimelineSeries] = []
+
+
+# --- Partes / Demandantes ---
+
+
+class ParteNormalizadaResponse(BaseModel):
+    """Parte normalizada com métricas agregadas."""
+
+    id: int
+    nome: str
+    cpf: str | None = None
+    cnpj: str | None = None
+    oab: str | None = None
+    tipo_pessoa: str | None = None
+    qtd_processos: int = 0
+    qtd_contra_estado: int = 0
+    qtd_executado_estado: int = 0
+    qtd_advogado: int = 0
+    qtd_coreu_estado: int = 0
+    valor_total: float = 0
+    valor_medio: float = 0
+
+
+class PartesRankingResponse(BaseModel):
+    """Resposta paginada de ranking de partes."""
+
+    items: list[ParteNormalizadaResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class PartesKPIsResponse(BaseModel):
+    """KPIs gerais de partes/demandantes."""
+
+    total_pessoas: int
+    total_demandantes: int
+    total_executados: int
+    total_advogados: int
+    total_coreus: int
+    valor_total_causas: float
+    total_processos_com_partes: int

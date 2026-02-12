@@ -23,6 +23,7 @@ from src.routers import (
     explorer,
     export,
     filters,
+    partes,
     pendencias,
     perfil,
     processos,
@@ -122,6 +123,49 @@ async def _ensure_auxiliary_tables() -> None:
                     CREATE INDEX IF NOT EXISTS idx_assuntos_pai
                     ON assuntos(codigo_pai)
                 """))
+                # Tabelas de partes do processo (populadas via ETL)
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS partes_processo (
+                        cd_processo     VARCHAR(50)  NOT NULL,
+                        seq_parte       INTEGER      NOT NULL,
+                        numero_processo VARCHAR(50),
+                        numero_formatado VARCHAR(50),
+                        cd_pessoa       BIGINT,
+                        nome            TEXT,
+                        tipo_parte      TEXT,
+                        polo            INTEGER,
+                        principal       CHAR(1),
+                        tipo_pessoa     CHAR(1),
+                        cd_categ_pessoa INTEGER,
+                        cpf             VARCHAR(20),
+                        cnpj            VARCHAR(20),
+                        rg              VARCHAR(30),
+                        oab             VARCHAR(30),
+                        valor_acao      NUMERIC,
+                        tipo_valor      CHAR(1),
+                        PRIMARY KEY (cd_processo, seq_parte)
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS partes_normalizadas (
+                        id                      SERIAL PRIMARY KEY,
+                        chave_tipo              VARCHAR(4) NOT NULL,
+                        chave_valor             TEXT NOT NULL,
+                        nome                    TEXT NOT NULL,
+                        cpf                     VARCHAR(20),
+                        cnpj                    VARCHAR(20),
+                        oab                     VARCHAR(30),
+                        tipo_pessoa             CHAR(1),
+                        qtd_processos           INTEGER DEFAULT 0,
+                        qtd_contra_estado       INTEGER DEFAULT 0,
+                        qtd_executado_estado    INTEGER DEFAULT 0,
+                        qtd_advogado            INTEGER DEFAULT 0,
+                        qtd_coreu_estado        INTEGER DEFAULT 0,
+                        valor_total             NUMERIC DEFAULT 0,
+                        valor_medio             NUMERIC DEFAULT 0,
+                        UNIQUE (chave_tipo, chave_valor)
+                    )
+                """))
                 # Tabela de log de acessos
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS access_logs (
@@ -193,6 +237,7 @@ app.include_router(comparativos.router)
 app.include_router(perfil.router)
 app.include_router(explorer.router)
 app.include_router(export.router)
+app.include_router(partes.router)
 
 
 @app.get("/api/health")

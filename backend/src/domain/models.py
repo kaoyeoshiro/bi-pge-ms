@@ -207,6 +207,52 @@ class AccessLog(Base):
     user_agent: Mapped[str | None] = mapped_column(Text)
 
 
+class ParteProcesso(Base):
+    """Partes de um processo (autores, réus, advogados) extraídas do Oracle."""
+
+    __tablename__ = "partes_processo"
+
+    cd_processo: Mapped[str] = mapped_column(String(50), primary_key=True)
+    seq_parte: Mapped[int] = mapped_column(Integer, primary_key=True)
+    numero_processo: Mapped[str | None] = mapped_column(String(50))
+    numero_formatado: Mapped[str | None] = mapped_column(String(50))
+    cd_pessoa: Mapped[int | None] = mapped_column(BigInteger)
+    nome: Mapped[str | None] = mapped_column(Text)
+    tipo_parte: Mapped[str | None] = mapped_column(Text)
+    polo: Mapped[int | None] = mapped_column(Integer)
+    principal: Mapped[str | None] = mapped_column(String(1))
+    tipo_pessoa: Mapped[str | None] = mapped_column(String(1))
+    cd_categ_pessoa: Mapped[int | None] = mapped_column(Integer)
+    cpf: Mapped[str | None] = mapped_column(String(20))
+    cnpj: Mapped[str | None] = mapped_column(String(20))
+    rg: Mapped[str | None] = mapped_column(String(30))
+    oab: Mapped[str | None] = mapped_column(String(30))
+    valor_acao: Mapped[float | None]
+    tipo_valor: Mapped[str | None] = mapped_column(String(1))
+
+
+class ParteNormalizada(Base):
+    """Partes normalizadas por CPF/CNPJ com métricas agregadas."""
+
+    __tablename__ = "partes_normalizadas"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chave_tipo: Mapped[str] = mapped_column(String(4), nullable=False)
+    chave_valor: Mapped[str] = mapped_column(Text, nullable=False)
+    nome: Mapped[str] = mapped_column(Text, nullable=False)
+    cpf: Mapped[str | None] = mapped_column(String(20))
+    cnpj: Mapped[str | None] = mapped_column(String(20))
+    oab: Mapped[str | None] = mapped_column(String(30))
+    tipo_pessoa: Mapped[str | None] = mapped_column(String(1))
+    qtd_processos: Mapped[int] = mapped_column(Integer, default=0)
+    qtd_contra_estado: Mapped[int] = mapped_column(Integer, default=0)
+    qtd_executado_estado: Mapped[int] = mapped_column(Integer, default=0)
+    qtd_advogado: Mapped[int] = mapped_column(Integer, default=0)
+    qtd_coreu_estado: Mapped[int] = mapped_column(Integer, default=0)
+    valor_total: Mapped[float] = mapped_column(default=0)
+    valor_medio: Mapped[float] = mapped_column(default=0)
+
+
 # Mapeamento de nome da tabela para modelo ORM
 TABLE_MODEL_MAP: dict[str, type[Base]] = {
     "processos_novos": ProcessoNovo,
