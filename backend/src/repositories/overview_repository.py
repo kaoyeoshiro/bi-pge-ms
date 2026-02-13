@@ -271,21 +271,64 @@ class OverviewRepository:
         return stmt.where(~exists_subq)
 
     async def _valor_aggregates(self, filters: GlobalFilters) -> tuple[float, float]:
-        """Retorna (soma, média) de valor_acao de TODOS os processos no banco.
+        """Retorna (soma, média) de valor_acao com filtros globais.
 
-        O valor da causa é propriedade imutável do processo — não faz sentido
-        filtrar por ano/data. Apenas o filtro de faixa (valor_min/valor_max)
-        é aplicado.
+        Aplica todos os filtros (ano, chefia, procurador, assunto, faixa)
+        e piso padrão de ano CNJ >= 2021 quando nenhum ano é selecionado,
+        consistente com a página Valores.
         """
+        date_col = ProcessoNovo.data
+
         stmt = select(
             func.coalesce(func.sum(ProcessoNovo.valor_acao), 0),
             func.coalesce(func.avg(ProcessoNovo.valor_acao), 0),
         ).select_from(ProcessoNovo).where(ProcessoNovo.valor_acao.isnot(None))
 
+        # Ano CNJ (mesmo cálculo de _count_filtered para ProcessoNovo)
+        has_cnj_year = ProcessoNovo.numero_formatado.op("~")(r"\.\d{4}\.")
+        cnj_year = cast(
+            func.split_part(ProcessoNovo.numero_formatado, ".", 2), Integer
+        )
+        year_expr = case(
+            (has_cnj_year, cnj_year),
+            else_=cast(func.extract("year", date_col), Integer),
+        )
+
+        if filters.anos:
+            if len(filters.anos) == 1:
+                stmt = stmt.where(year_expr == filters.anos[0])
+            else:
+                stmt = stmt.where(year_expr.in_(filters.anos))
+        else:
+            stmt = stmt.where(year_expr >= 2021)
+
+        if filters.mes:
+            stmt = stmt.where(func.extract("month", date_col) == filters.mes)
+        if filters.data_inicio:
+            stmt = stmt.where(date_col >= str(filters.data_inicio))
+        if filters.data_fim:
+            stmt = stmt.where(date_col <= str(filters.data_fim))
+        if filters.chefia:
+            stmt = stmt.where(normalize_chefia_expr(ProcessoNovo.chefia).in_(filters.chefia))
+        if filters.procurador:
+            stmt = stmt.where(ProcessoNovo.procurador.in_(filters.procurador))
+
+        if filters.assunto:
+            assunto_subq = (
+                select(ProcessoAssunto.numero_processo)
+                .where(ProcessoAssunto.codigo_assunto.in_(filters.assunto))
+                .distinct()
+                .scalar_subquery()
+            )
+            stmt = stmt.where(ProcessoNovo.numero_processo.in_(assunto_subq))
+
         if filters.valor_min is not None:
             stmt = stmt.where(ProcessoNovo.valor_acao >= filters.valor_min)
         if filters.valor_max is not None:
             stmt = stmt.where(ProcessoNovo.valor_acao <= filters.valor_max)
+
+        if filters.exclude_hidden:
+            stmt = self._apply_hidden_filter_orm(stmt, ProcessoNovo, date_col)
 
         result = await self.session.execute(stmt)
         row = result.one()
