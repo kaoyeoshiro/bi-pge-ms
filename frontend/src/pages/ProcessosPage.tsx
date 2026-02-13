@@ -23,6 +23,7 @@ const TABLE_COLUMNS = [
   { key: 'codigo_processo', label: 'Código' },
   { key: 'numero_formatado', label: 'Nº Formatado' },
   { key: 'procurador', label: 'Procurador' },
+  { key: 'valor_acao', label: 'Valor Causa', type: 'currency' },
 ]
 
 export function ProcessosPage() {
@@ -49,7 +50,7 @@ export function ProcessosPage() {
   return (
     <>
       <TopBar title="Processos Novos" />
-      <FilterBar />
+      <FilterBar showValorFaixa />
       {assuntosTree && assuntosTree.length > 0 && (
         <div className="flex items-center gap-2 border-b border-gray-200 bg-surface px-3 py-2 sm:px-6 sm:py-2">
           <TreeSelectFilter

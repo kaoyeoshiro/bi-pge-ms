@@ -28,6 +28,7 @@ from src.routers import (
     perfil,
     processos,
     producao,
+    valores,
 )
 
 # Diretório dos arquivos estáticos do frontend (gerados pelo Vite build)
@@ -238,6 +239,7 @@ app.include_router(perfil.router)
 app.include_router(explorer.router)
 app.include_router(export.router)
 app.include_router(partes.router)
+app.include_router(valores.router)
 
 
 @app.get("/api/health")

@@ -18,6 +18,8 @@ class GlobalFilters:
     area: list[str] = field(default_factory=list)
     assessor: list[str] = field(default_factory=list)
     assunto: list[int] = field(default_factory=list)
+    valor_min: float | None = None
+    valor_max: float | None = None
     exclude_hidden: bool = True
     exclude_no_pendencias: bool = True
 

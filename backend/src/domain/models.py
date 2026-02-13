@@ -37,6 +37,8 @@ class ProcessoNovo(Base):
     numero_processo: Mapped[int | None] = mapped_column(BigInteger)
     numero_formatado: Mapped[str | None] = mapped_column(Text)
     procurador: Mapped[str | None] = mapped_column(String(300))
+    valor_acao: Mapped[float | None]
+    tipo_valor: Mapped[str | None] = mapped_column(String(1))
 
 
 class PecaElaborada(Base):

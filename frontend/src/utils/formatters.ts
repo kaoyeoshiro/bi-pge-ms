@@ -26,6 +26,8 @@ export function formatKPI(value: number, formato?: string): string {
       return formatPercent(value)
     case 'decimal':
       return formatDecimal(value)
+    case 'moeda':
+      return formatCurrency(value)
     default:
       return formatNumber(value)
   }

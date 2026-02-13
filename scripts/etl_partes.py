@@ -143,7 +143,7 @@ WHERE PC.CDSITUACAOPROC IN (3, 4, 5)
 
 QUERY_VALOR_ACAO = """
 SELECT
-    PC.CDPROCESSO  AS cd_processo,
+    PC.NUPROCESSO  AS numero_processo,
     PC.VLACAO      AS valor_acao,
     PC.TPVALOR     AS tipo_valor
 FROM SAJ.ESPJPROCESSO PC
@@ -187,8 +187,8 @@ UPSERT_VALOR = """
 UPDATE processos_novos
 SET valor_acao = d.valor_acao,
     tipo_valor = d.tipo_valor
-FROM (VALUES %s) AS d(cd_processo, valor_acao, tipo_valor)
-WHERE processos_novos.cd_processo = d.cd_processo
+FROM (VALUES %s) AS d(numero_processo, valor_acao, tipo_valor)
+WHERE processos_novos.numero_processo = d.numero_processo::bigint
 """
 
 
@@ -269,10 +269,10 @@ def extract_and_load_valor(
 
         batch = []
         for row in rows:
-            cd_processo = row[0].strip() if row[0] else row[0]
+            numero_processo = row[0]
             valor_acao = row[1]
             tipo_valor = row[2].strip() if row[2] else row[2]
-            batch.append((cd_processo, valor_acao, tipo_valor))
+            batch.append((numero_processo, valor_acao, tipo_valor))
 
         execute_values(
             pg_cur,

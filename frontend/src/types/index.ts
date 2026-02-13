@@ -230,3 +230,20 @@ export interface ParteProcessoItem {
   polo: number | null
   valor_acao: number | null
 }
+
+// --- Valores da Causa ---
+
+export interface ValorFaixaItem {
+  faixa: string
+  qtd: number
+  percentual: number
+  valor_total: number
+  valor_medio: number
+}
+
+export interface ValorGroupItem {
+  grupo: string
+  qtd_processos: number
+  valor_total: number
+  valor_medio: number
+}

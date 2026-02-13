@@ -21,15 +21,18 @@ class ProcessosService:
 
     @cached(ttl=300)
     async def get_kpis(self, filters: GlobalFilters) -> list[KPIValue]:
-        """KPIs: total e média mensal."""
+        """KPIs: total, média mensal, valor total e valor médio."""
         total = await self.repo.total_count(filters)
         timeline = await self.repo.count_by_period(filters)
         meses = len(timeline) if timeline else 1
         media_mes = round(total / meses) if meses > 0 else 0
+        valor_total, valor_medio = await self.repo.valor_aggregates(filters)
 
         return [
             KPIValue(label="Total de Processos", valor=total),
             KPIValue(label="Média por Mês", valor=media_mes),
+            KPIValue(label="Valor Total Causas", valor=valor_total, formato="moeda"),
+            KPIValue(label="Valor Médio Causa", valor=valor_medio, formato="moeda"),
         ]
 
     @cached(ttl=300)

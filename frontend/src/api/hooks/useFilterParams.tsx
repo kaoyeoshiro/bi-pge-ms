@@ -49,6 +49,8 @@ export function useFilterParams() {
   const categorias = useFilterStore((s) => s.categorias)
   const areas = useFilterStore((s) => s.areas)
   const assuntos = useFilterStore((s) => s.assuntos)
+  const valorMin = useFilterStore((s) => s.valorMin)
+  const valorMax = useFilterStore((s) => s.valorMax)
 
   return useMemo(() => {
     // Se um FilterParamsProvider está presente, usar seus params
@@ -65,6 +67,8 @@ export function useFilterParams() {
     if (categorias.length) params.categoria = categorias
     if (areas.length) params.area = areas
     if (assuntos.length) params.assunto = assuntos.join(',')
+    if (valorMin !== null) params.valor_min = String(valorMin)
+    if (valorMax !== null) params.valor_max = String(valorMax)
     return params
-  }, [override, anos, mes, dataInicio, dataFim, chefias, procuradores, categorias, areas, assuntos])
+  }, [override, anos, mes, dataInicio, dataFim, chefias, procuradores, categorias, areas, assuntos, valorMin, valorMax])
 }

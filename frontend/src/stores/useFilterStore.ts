@@ -10,6 +10,8 @@ interface FilterState {
   categorias: string[]
   areas: string[]
   assuntos: number[]
+  valorMin: number | null
+  valorMax: number | null
 
   setAnos: (anos: number[]) => void
   setMes: (mes: number | null) => void
@@ -20,6 +22,7 @@ interface FilterState {
   setCategorias: (categorias: string[]) => void
   setAreas: (areas: string[]) => void
   setAssuntos: (assuntos: number[]) => void
+  setValorFaixa: (min: number | null, max: number | null) => void
   clearAll: () => void
   toQueryParams: () => Record<string, string | string[]>
 }
@@ -34,6 +37,8 @@ const initialState = {
   categorias: [] as string[],
   areas: [] as string[],
   assuntos: [] as number[],
+  valorMin: null as number | null,
+  valorMax: null as number | null,
 }
 
 export const useFilterStore = create<FilterState>((set, get) => ({
@@ -48,6 +53,7 @@ export const useFilterStore = create<FilterState>((set, get) => ({
   setCategorias: (categorias) => set({ categorias }),
   setAreas: (areas) => set({ areas }),
   setAssuntos: (assuntos) => set({ assuntos }),
+  setValorFaixa: (valorMin, valorMax) => set({ valorMin, valorMax }),
 
   clearAll: () => set(initialState),
 
@@ -64,6 +70,8 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     if (state.categorias.length) params.categoria = state.categorias
     if (state.areas.length) params.area = state.areas
     if (state.assuntos.length) params.assunto = state.assuntos.join(',')
+    if (state.valorMin !== null) params.valor_min = String(state.valorMin)
+    if (state.valorMax !== null) params.valor_max = String(state.valorMax)
 
     return params
   },

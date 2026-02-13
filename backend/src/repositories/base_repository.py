@@ -10,7 +10,7 @@ from sqlalchemy.orm import DeclarativeBase
 from src.domain.constants import ASSESSORES_ADMINISTRATIVOS, CATEGORIAS_NAO_PRODUTIVAS
 from src.domain.enums import Granularity
 from src.domain.filters import GlobalFilters, PaginationParams
-from src.domain.models import HiddenProcuradorProducao, PecaFinalizada, Pendencia, ProcessoAssunto, UserRole
+from src.domain.models import HiddenProcuradorProducao, PecaFinalizada, Pendencia, ProcessoAssunto, ProcessoNovo, UserRole
 from src.domain.schemas import GroupCount, PaginatedResponse, TimelinePoint
 from src.services.normalization import normalize_chefia_expr, normalize_procurador_expr
 
@@ -132,6 +132,46 @@ class BaseRepository:
                 .scalar_subquery()
             )
             stmt = stmt.where(self.model.numero_processo.in_(assunto_subq))
+
+        # Filtro por faixa de valor da causa
+        # Regra: sem valor_min → inclui NULLs (processos sem valor informado)
+        #         com valor_min → exclui NULLs (só processos com valor no range)
+        if filters.valor_min is not None or filters.valor_max is not None:
+            if self.model is ProcessoNovo:
+                if filters.valor_min is not None:
+                    stmt = stmt.where(ProcessoNovo.valor_acao >= filters.valor_min)
+                if filters.valor_max is not None:
+                    if filters.valor_min is None:
+                        # "Até X" — inclui processos sem valor informado
+                        stmt = stmt.where(or_(
+                            ProcessoNovo.valor_acao <= filters.valor_max,
+                            ProcessoNovo.valor_acao.is_(None),
+                        ))
+                    else:
+                        stmt = stmt.where(ProcessoNovo.valor_acao <= filters.valor_max)
+            elif hasattr(self.model, "numero_processo"):
+                valor_subq = select(ProcessoNovo.numero_processo)
+                if filters.valor_min is not None:
+                    valor_subq = valor_subq.where(
+                        ProcessoNovo.valor_acao >= filters.valor_min
+                    )
+                if filters.valor_max is not None:
+                    if filters.valor_min is None:
+                        valor_subq = valor_subq.where(or_(
+                            ProcessoNovo.valor_acao <= filters.valor_max,
+                            ProcessoNovo.valor_acao.is_(None),
+                        ))
+                    else:
+                        valor_subq = valor_subq.where(
+                            ProcessoNovo.valor_acao <= filters.valor_max
+                        )
+                else:
+                    valor_subq = valor_subq.where(
+                        ProcessoNovo.valor_acao.isnot(None)
+                    )
+                stmt = stmt.where(
+                    self.model.numero_processo.in_(valor_subq.distinct().scalar_subquery())
+                )
 
         # Excluir categorias não-produtivas de pecas_finalizadas
         if self.model is PecaFinalizada:

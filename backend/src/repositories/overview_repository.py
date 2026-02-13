@@ -104,6 +104,41 @@ class OverviewRepository:
                 f")"
             )
 
+        # Filtro por faixa de valor da causa
+        # Sem valor_min → inclui NULLs (processos sem valor informado)
+        # Com valor_min → exclui NULLs (só processos com valor no range)
+        if filters.valor_min is not None or filters.valor_max is not None:
+            if table == "processos_novos":
+                if filters.valor_min is not None:
+                    clauses.append(f"valor_acao >= {filters.valor_min}")
+                if filters.valor_max is not None:
+                    if filters.valor_min is None:
+                        clauses.append(
+                            f"(valor_acao <= {filters.valor_max} OR valor_acao IS NULL)"
+                        )
+                    else:
+                        clauses.append(f"valor_acao <= {filters.valor_max}")
+            else:
+                valor_conds = []
+                if filters.valor_min is not None:
+                    valor_conds.append(f"valor_acao >= {filters.valor_min}")
+                if filters.valor_max is not None:
+                    if filters.valor_min is None:
+                        valor_conds.append(
+                            f"(valor_acao <= {filters.valor_max} OR valor_acao IS NULL)"
+                        )
+                    else:
+                        valor_conds.append(f"valor_acao <= {filters.valor_max}")
+                else:
+                    valor_conds.append("valor_acao IS NOT NULL")
+                valor_where = " AND ".join(valor_conds)
+                clauses.append(
+                    f"numero_processo IN ("
+                    f"SELECT DISTINCT numero_processo FROM processos_novos "
+                    f"WHERE {valor_where}"
+                    f")"
+                )
+
         return " AND ".join(clauses) if clauses else "1=1"
 
     async def _count_filtered(
@@ -162,6 +197,43 @@ class OverviewRepository:
             )
             stmt = stmt.where(model.numero_processo.in_(assunto_subq))
 
+        # Filtro por faixa de valor da causa
+        if filters.valor_min is not None or filters.valor_max is not None:
+            if model is ProcessoNovo:
+                if filters.valor_min is not None:
+                    stmt = stmt.where(ProcessoNovo.valor_acao >= filters.valor_min)
+                if filters.valor_max is not None:
+                    if filters.valor_min is None:
+                        stmt = stmt.where(or_(
+                            ProcessoNovo.valor_acao <= filters.valor_max,
+                            ProcessoNovo.valor_acao.is_(None),
+                        ))
+                    else:
+                        stmt = stmt.where(ProcessoNovo.valor_acao <= filters.valor_max)
+            else:
+                valor_subq = select(ProcessoNovo.numero_processo)
+                if filters.valor_min is not None:
+                    valor_subq = valor_subq.where(
+                        ProcessoNovo.valor_acao >= filters.valor_min
+                    )
+                if filters.valor_max is not None:
+                    if filters.valor_min is None:
+                        valor_subq = valor_subq.where(or_(
+                            ProcessoNovo.valor_acao <= filters.valor_max,
+                            ProcessoNovo.valor_acao.is_(None),
+                        ))
+                    else:
+                        valor_subq = valor_subq.where(
+                            ProcessoNovo.valor_acao <= filters.valor_max
+                        )
+                else:
+                    valor_subq = valor_subq.where(
+                        ProcessoNovo.valor_acao.isnot(None)
+                    )
+                stmt = stmt.where(
+                    model.numero_processo.in_(valor_subq.distinct().scalar_subquery())
+                )
+
         # Excluir produção oculta por regras administrativas
         if filters.exclude_hidden and model.__tablename__ in _HIDDEN_TABLES:
             stmt = self._apply_hidden_filter_orm(stmt, model, date_col)
@@ -198,19 +270,43 @@ class OverviewRepository:
         )
         return stmt.where(~exists_subq)
 
+    async def _valor_aggregates(self, filters: GlobalFilters) -> tuple[float, float]:
+        """Retorna (soma, média) de valor_acao de TODOS os processos no banco.
+
+        O valor da causa é propriedade imutável do processo — não faz sentido
+        filtrar por ano/data. Apenas o filtro de faixa (valor_min/valor_max)
+        é aplicado.
+        """
+        stmt = select(
+            func.coalesce(func.sum(ProcessoNovo.valor_acao), 0),
+            func.coalesce(func.avg(ProcessoNovo.valor_acao), 0),
+        ).select_from(ProcessoNovo).where(ProcessoNovo.valor_acao.isnot(None))
+
+        if filters.valor_min is not None:
+            stmt = stmt.where(ProcessoNovo.valor_acao >= filters.valor_min)
+        if filters.valor_max is not None:
+            stmt = stmt.where(ProcessoNovo.valor_acao <= filters.valor_max)
+
+        result = await self.session.execute(stmt)
+        row = result.one()
+        return float(row[0]), float(row[1])
+
     async def get_kpis(self, filters: GlobalFilters) -> list[KPIValue]:
-        """Retorna os 3 KPIs principais do Overview (métricas de procurador).
+        """Retorna os KPIs principais do Overview.
 
         Peças elaboradas é métrica de assessor e aparece apenas em /perfil-assessor.
         """
         count_pn = await self._count_filtered(ProcessoNovo, filters)
         count_pf = await self._count_filtered(PecaFinalizada, filters)
         count_pd = await self._count_filtered(Pendencia, filters)
+        valor_total, valor_medio = await self._valor_aggregates(filters)
 
         return [
             KPIValue(label="Processos Novos", valor=count_pn),
             KPIValue(label="Peças Finalizadas", valor=count_pf),
             KPIValue(label="Pendências", valor=count_pd),
+            KPIValue(label="Valor Total Causas", valor=valor_total, formato="moeda"),
+            KPIValue(label="Valor Médio Causa", valor=valor_medio, formato="moeda"),
         ]
 
     async def get_timeline(

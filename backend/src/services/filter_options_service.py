@@ -2,7 +2,7 @@
 
 import logging
 
-from sqlalchemy import func, select, distinct
+from sqlalchemy import Integer, case, cast, func, select, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models import Assunto, PecaElaborada, Pendencia, ProcessoAssunto, ProcessoNovo, UserRole
@@ -97,12 +97,27 @@ class FilterOptionsService:
         return [str(row[0]) for row in result.all() if row[0] not in ASSESSORES_ADMINISTRATIVOS]
 
     async def _get_anos(self) -> list[int]:
-        """Retorna anos disponíveis nos dados."""
+        """Retorna anos disponíveis nos dados.
+
+        Usa ano CNJ (extraído de numero_formatado) para processos_novos,
+        com fallback para EXTRACT(YEAR FROM data). Isso garante consistência
+        com o filtro de ano aplicado em _get_year_expr() do BaseRepository.
+        """
+        has_cnj = ProcessoNovo.numero_formatado.op("~")(r"\.\d{4}\.")
+        cnj_year = cast(
+            func.split_part(ProcessoNovo.numero_formatado, ".", 2), Integer
+        )
+        year_expr = case(
+            (has_cnj, cnj_year),
+            else_=cast(func.extract("year", ProcessoNovo.data), Integer),
+        )
+
         stmt = (
-            select(func.extract("year", ProcessoNovo.data).label("ano"))
+            select(year_expr.label("ano"))
             .where(ProcessoNovo.data.isnot(None))
+            .where(year_expr >= 2021)
             .distinct()
-            .order_by(func.extract("year", ProcessoNovo.data))
+            .order_by(year_expr)
         )
         result = await self.session.execute(stmt)
         return [int(row.ano) for row in result.all()]

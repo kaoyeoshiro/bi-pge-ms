@@ -17,7 +17,9 @@ SELECT
     PC.CDPROCESSO       AS codigo_processo,
     PC.NUPROCESSO       AS numero_processo,
     PC.NUFORMATADO      AS numero_formatado,
-    NOME.NMPESSOA       AS procurador
+    NOME.NMPESSOA       AS procurador,
+    PC.VLACAO           AS valor_acao,
+    PC.TPVALOR          AS tipo_valor
 FROM
     SAJ.ESPJPROCESSO PC
     JOIN SAJ.ESPJDISTPROCESSO DP ON DP.CDPROCESSO = PC.CDPROCESSO

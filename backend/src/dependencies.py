@@ -22,6 +22,8 @@ async def parse_global_filters(
     area: list[str] = Query(default=[], description="Áreas para filtrar"),
     assessor: list[str] = Query(default=[], description="Assessores para filtrar"),
     assunto: str = Query("", description="Códigos de assunto separados por vírgula"),
+    valor_min: float | None = Query(None, description="Valor mínimo da causa"),
+    valor_max: float | None = Query(None, description="Valor máximo da causa"),
 ) -> GlobalFilters:
     """Extrai filtros globais dos query params.
 
@@ -42,6 +44,8 @@ async def parse_global_filters(
         area=area,
         assessor=assessor,
         assunto=assunto_list,
+        valor_min=valor_min,
+        valor_max=valor_max,
     )
 
 

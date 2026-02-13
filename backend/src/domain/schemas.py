@@ -231,3 +231,25 @@ class PartesKPIsResponse(BaseModel):
     total_coreus: int
     valor_total_causas: float
     total_processos_com_partes: int
+
+
+# --- Valores da Causa ---
+
+
+class ValorFaixaItem(BaseModel):
+    """Distribuição de processos por faixa de valor."""
+
+    faixa: str
+    qtd: int
+    percentual: float
+    valor_total: float
+    valor_medio: float
+
+
+class ValorGroupItem(BaseModel):
+    """Agregação de valor por dimensão (chefia, assunto, procurador)."""
+
+    grupo: str
+    qtd_processos: int
+    valor_total: float
+    valor_medio: float

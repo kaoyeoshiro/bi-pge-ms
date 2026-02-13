@@ -31,7 +31,7 @@ export function OverviewPage() {
   return (
     <>
       <TopBar title="Visão Geral" />
-      <FilterBar />
+      <FilterBar showValorFaixa />
       <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
         <KPIGrid data={kpis.data} isLoading={kpis.isLoading} isError={kpis.isError} />
 

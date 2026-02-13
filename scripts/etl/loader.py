@@ -17,6 +17,7 @@ TABLE_COLUMNS: dict[str, list[str]] = {
     "processos_novos": [
         "cd_processo", "chefia", "data", "codigo_processo",
         "numero_processo", "numero_formatado", "procurador",
+        "valor_acao", "tipo_valor",
     ],
     "pecas_elaboradas": [
         "cd_documento", "chefia", "data", "usuario_criacao",
@@ -63,6 +64,19 @@ SCHEMA_MIGRATIONS = [
     """
     CREATE UNIQUE INDEX IF NOT EXISTS uix_processos_novos_cd_processo
     ON processos_novos (cd_processo) WHERE cd_processo IS NOT NULL;
+    """,
+    # Adiciona colunas valor_acao e tipo_valor em processos_novos
+    """
+    DO $$ BEGIN
+        ALTER TABLE processos_novos ADD COLUMN valor_acao NUMERIC;
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+        ALTER TABLE processos_novos ADD COLUMN tipo_valor CHAR(1);
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
     """,
     # Adiciona coluna cd_documento em pecas_elaboradas
     """
@@ -170,14 +184,14 @@ class PostgresLoader:
         oracle_pk = TABLE_ORACLE_PK[table]
         update_cols = TABLE_UPDATE_COLUMNS[table]
 
-        # Monta lista de valores
+        # Monta lista de valores (strip em strings para remover padding CHAR do Oracle)
         values_list = []
         for rec in records:
             values = []
             for col in columns:
                 val = rec.get(col)
-                if isinstance(val, datetime):
-                    val = val  # psycopg2 lida com datetime nativamente
+                if isinstance(val, str):
+                    val = val.strip()
                 values.append(val)
             values_list.append(tuple(values))
 

@@ -3,7 +3,7 @@ import type { PaginatedResponse, PaginationParams } from '../../types'
 import { Spinner } from '../ui/Spinner'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorAlert } from '../ui/ErrorAlert'
-import { formatDateTime } from '../../utils/formatters'
+import { formatCurrency, formatDateTime } from '../../utils/formatters'
 import { ExportButton } from './ExportButton'
 
 interface DataTableProps {
@@ -98,7 +98,11 @@ export function DataTable({
                       <td key={col.key} className="whitespace-nowrap px-4 py-2.5 text-sm text-gray-700">
                         {col.type === 'datetime'
                           ? formatDateTime(row[col.key] as string)
-                          : String(row[col.key] ?? '')}
+                          : col.type === 'currency'
+                            ? row[col.key] != null
+                              ? formatCurrency(row[col.key] as number)
+                              : '-'
+                            : String(row[col.key] ?? '')}
                       </td>
                     ))}
                   </tr>

@@ -15,7 +15,7 @@ export function KPIGrid({ data, isLoading, isError }: KPIGridProps) {
   if (!data?.length) return null
 
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className={`grid grid-cols-2 gap-4 ${data.length <= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-5'}`}>
       {data.map((kpi) => (
         <KPICard
           key={kpi.label}

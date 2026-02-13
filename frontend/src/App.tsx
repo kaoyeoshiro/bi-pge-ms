@@ -12,6 +12,7 @@ import { PerfilChefiaPage } from './pages/PerfilChefiaPage'
 import { PerfilAssessorPage } from './pages/PerfilAssessorPage'
 import { AdminPage } from './pages/AdminPage'
 import { PartesPage } from './pages/PartesPage'
+import { ValoresPage } from './pages/ValoresPage'
 
 const SHOW_PARTES = import.meta.env.VITE_HIDE_PARTES !== 'true'
 
@@ -23,6 +24,7 @@ function App() {
         <Route path="/producao" element={<ProducaoPage />} />
         <Route path="/pendencias" element={<PendenciasPage />} />
         <Route path="/processos" element={<ProcessosPage />} />
+        <Route path="/valores" element={<ValoresPage />} />
         <Route path="/assuntos" element={<AssuntosPage />} />
         <Route path="/perfil-procurador" element={<PerfilProcuradorPage />} />
         <Route path="/perfil-chefia" element={<PerfilChefiaPage />} />
