@@ -159,7 +159,7 @@ class RailwaySync:
             cmd.extend(["-t", table])
         cmd.extend(["-f", output_path])
 
-        logger.info("pg_dump: %s → %s", ", ".join(tables), Path(output_path).name)
+        logger.info("pg_dump: %s -> %s", ", ".join(tables), Path(output_path).name)
         result = subprocess.run(
             cmd, env=self._local_env(),
             capture_output=True, text=True, timeout=DUMP_TIMEOUT,
@@ -192,22 +192,23 @@ class RailwaySync:
         disable_triggers: bool = False,
         single_transaction: bool = True,
     ) -> None:
-        """Executa pg_restore no Railway com transação atômica.
+        """Executa pg_restore no Railway.
 
-        Com --single-transaction --clean --if-exists, o restore faz
-        TRUNCATE + COPY dentro de uma única transação. Se falhar,
-        faz rollback e os dados originais são preservados.
+        Com --single-transaction, todo o COPY ocorre em uma unica transacao.
+        Se falhar, faz rollback (dados parciais nao ficam no banco).
+
+        Nota: --clean e --data-only sao incompativeis no pg_restore.
+        O TRUNCATE deve ser feito separadamente antes de chamar este metodo.
 
         Args:
             dump_path: Caminho do arquivo .dump (formato custom).
             disable_triggers: Se True, desabilita triggers durante restore.
-            single_transaction: Se True, usa --single-transaction (padrão).
+            single_transaction: Se True, usa --single-transaction (padrao).
         """
         cmd = [
             self._pg_restore,
             "-d", self._railway_url,
             "--data-only", "--no-owner", "--no-privileges",
-            "--clean", "--if-exists",
         ]
         if single_transaction:
             cmd.append("--single-transaction")
@@ -222,13 +223,13 @@ class RailwaySync:
             suffix_parts.append("triggers desabilitados")
         suffix = f" ({', '.join(suffix_parts)})" if suffix_parts else ""
 
-        logger.info("pg_restore → Railway%s...", suffix)
+        logger.info("pg_restore -> Railway%s...", suffix)
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=RESTORE_TIMEOUT)
         if result.returncode != 0:
             raise RuntimeError(
                 f"pg_restore falhou (rc={result.returncode}): {result.stderr.strip()}"
             )
-        logger.info("pg_restore concluído.")
+        logger.info("pg_restore concluido.")
 
     def _run_pg_restore_with_retry(self, dump_path: str, **kwargs) -> None:
         """Executa pg_restore com retry e backoff exponencial.
@@ -285,7 +286,7 @@ class RailwaySync:
             include_partes: Se False, pula partes_processo e partes_normalizadas.
         """
         logger.info("=" * 60)
-        logger.info("SYNC: PostgreSQL local → Railway")
+        logger.info("SYNC: PostgreSQL local -> Railway")
 
         self.sync_schema()
         self._sync_main_tables()
@@ -300,10 +301,15 @@ class RailwaySync:
         logger.info("Sincronização Railway concluída.")
 
     def _sync_main_tables(self) -> None:
-        """Dump e restore atômico das 4 tabelas principais."""
+        """Dump, truncate e restore das 4 tabelas principais."""
         dump_path = tempfile.mktemp(suffix=".dump", prefix="etl_main_")
         try:
             self._run_pg_dump(MAIN_TABLES, dump_path)
+
+            tables_csv = ", ".join(MAIN_TABLES)
+            logger.info("TRUNCATE %s no Railway...", tables_csv)
+            self._run_psql_railway(f"TRUNCATE {tables_csv};")
+
             self._run_pg_restore_with_retry(dump_path)
         finally:
             _cleanup_file(dump_path)
@@ -318,10 +324,11 @@ class RailwaySync:
         try:
             self._run_pg_dump(ASSUNTOS_TABLES, dump_path)
 
-            logger.info("Desabilitando triggers de assuntos no Railway...")
+            logger.info("Desabilitando triggers e truncando assuntos no Railway...")
             self._run_psql_railway(
                 "ALTER TABLE assuntos DISABLE TRIGGER ALL; "
-                "ALTER TABLE processo_assuntos DISABLE TRIGGER ALL;"
+                "ALTER TABLE processo_assuntos DISABLE TRIGGER ALL; "
+                "TRUNCATE processo_assuntos, assuntos;"
             )
 
             try:
@@ -339,10 +346,15 @@ class RailwaySync:
             _cleanup_file(dump_path)
 
     def _sync_partes(self) -> None:
-        """Dump e restore atômico de partes_processo + partes_normalizadas."""
+        """Dump, truncate e restore de partes_processo + partes_normalizadas."""
         dump_path = tempfile.mktemp(suffix=".dump", prefix="etl_partes_")
         try:
             self._run_pg_dump(PARTES_TABLES, dump_path)
+
+            tables_csv = ", ".join(PARTES_TABLES)
+            logger.info("TRUNCATE %s no Railway...", tables_csv)
+            self._run_psql_railway(f"TRUNCATE {tables_csv};")
+
             self._run_pg_restore_with_retry(dump_path)
 
             # Reajusta a sequence SERIAL de partes_normalizadas

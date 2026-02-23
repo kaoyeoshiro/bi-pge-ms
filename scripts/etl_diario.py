@@ -290,7 +290,7 @@ def main() -> None:
         # Etapa 1 + 2: ETL Oracle → PG local (principais + partes)
         if not args.sync_only:
             logger.info("")
-            logger.info(">>> ETAPA 1: ETL Oracle → PostgreSQL local")
+            logger.info(">>> ETAPA 1: ETL Oracle -> PostgreSQL local")
             _run_etl(args)
             logger.info(">>> ETL concluído.")
         else:
@@ -300,9 +300,9 @@ def main() -> None:
         if not args.etl_only:
             logger.info("")
             if args.schema_only:
-                logger.info(">>> ETAPA 3: Sincronização de schema → Railway")
+                logger.info(">>> ETAPA 3: Sync schema -> Railway")
             else:
-                logger.info(">>> ETAPA 3/4: Sincronização PG local → Railway")
+                logger.info(">>> ETAPA 3/4: Sync PG local -> Railway")
             _run_sync(
                 include_assuntos=not args.no_assuntos,
                 include_partes=not args.no_partes,
