@@ -13,7 +13,10 @@ engine = create_async_engine(
     max_overflow=20,
     pool_pre_ping=True,
     pool_timeout=30,
-    connect_args={"timeout": 15},
+    connect_args={
+        "timeout": 15,
+        "command_timeout": 60,  # Timeout de query (evita travamento durante sync Railway)
+    },
 )
 
 async_session_factory = async_sessionmaker(

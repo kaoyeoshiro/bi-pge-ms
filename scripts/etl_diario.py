@@ -1,8 +1,10 @@
 """Script único para atualização diária: Oracle → PG local → Railway.
 
-Executa o pipeline completo em duas etapas:
-  1. ETL Oracle → PostgreSQL local (incremental, últimos 30 dias)
-  2. Sincronização PG local → Railway (produção)
+Executa o pipeline completo em até 4 etapas:
+  1. ETL Oracle → PostgreSQL local (processos, peças, pendências)
+  2. ETL Oracle → PostgreSQL local (partes + normalização)
+  3. Sync schema PG local → Railway
+  4. Sync dados PG local → Railway (todas as tabelas incl. partes)
 
 Uso:
   python etl_diario.py                # Completo: ETL + sync Railway
@@ -10,6 +12,8 @@ Uso:
   python etl_diario.py --sync-only    # Só sync PG local → Railway
   python etl_diario.py --full         # ETL full (desde 2021) + sync
   python etl_diario.py --no-assuntos  # Pula assuntos em ambas as etapas
+  python etl_diario.py --no-partes    # Pula partes/normalização
+  python etl_diario.py --schema-only  # Só sync de schema (sem dados)
   python etl_diario.py --tables processos_novos pecas_finalizadas
 
 Requer:
@@ -63,19 +67,19 @@ def _setup_logging() -> None:
 def _parse_args() -> argparse.Namespace:
     """Analisa argumentos da linha de comando."""
     parser = argparse.ArgumentParser(
-        description="ETL diário: Oracle → PG local → Railway",
+        description="ETL diario: Oracle -> PG local -> Railway",
     )
 
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--etl-only",
         action="store_true",
-        help="Só executa ETL Oracle → PG local (não sincroniza com Railway)",
+        help="So executa ETL Oracle -> PG local (nao sincroniza com Railway)",
     )
     mode.add_argument(
         "--sync-only",
         action="store_true",
-        help="Só sincroniza PG local → Railway (pula ETL Oracle)",
+        help="So sincroniza PG local -> Railway (pula ETL Oracle)",
     )
 
     parser.add_argument(
@@ -89,6 +93,16 @@ def _parse_args() -> argparse.Namespace:
         help="Pula assuntos em ambas as etapas",
     )
     parser.add_argument(
+        "--no-partes",
+        action="store_true",
+        help="Pula partes e normalizacao em ambas as etapas",
+    )
+    parser.add_argument(
+        "--schema-only",
+        action="store_true",
+        help="So sincroniza schema (sem dados). Usar com --sync-only.",
+    )
+    parser.add_argument(
         "--tables",
         nargs="+",
         choices=ETL_TABLES,
@@ -99,7 +113,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-# ── Etapa 1: ETL Oracle → PG local ───────────────────────────────────
+# ── Etapa 1: ETL Oracle → PG local (tabelas principais) ──────────────
 
 
 def _run_etl(args: argparse.Namespace) -> None:
@@ -161,15 +175,84 @@ def _run_etl(args: argparse.Namespace) -> None:
 
             extractor.close()
 
+            # Partes (usa conexão Oracle própria, mesmo túnel)
+            if not args.no_partes:
+                logger.info("")
+                logger.info("=" * 60)
+                logger.info(">>> ETAPA 2: ETL Partes + Normalização")
+                _run_partes_etl(start_date, end_date)
+
     finally:
         loader.close()
 
 
-# ── Etapa 2: Sync PG local → Railway ─────────────────────────────────
+# ── Etapa 2: ETL Partes + Normalização ────────────────────────────────
 
 
-def _run_sync(include_assuntos: bool) -> None:
-    """Sincroniza PostgreSQL local → Railway (produção)."""
+def _run_partes_etl(start_date: date, end_date: date) -> None:
+    """Extrai partes do Oracle e normaliza no PostgreSQL local.
+
+    Requer que o túnel SSH já esteja aberto (chamado dentro do
+    contexto OracleTunnel).
+    """
+    logger = logging.getLogger("etl_partes")
+
+    import oracledb
+    import psycopg2
+
+    from etl.extractor import _init_thick_mode
+    from etl_partes import create_pg_tables, extract_and_load_partes, extract_and_load_valor
+    from normalize_partes import normalize
+
+    pg_cfg = PostgresConfig()
+    pg_conn = psycopg2.connect(
+        host=pg_cfg.host,
+        port=pg_cfg.port,
+        user=pg_cfg.user,
+        password=pg_cfg.password,
+        dbname=pg_cfg.dbname,
+    )
+
+    try:
+        create_pg_tables(pg_conn)
+
+        _init_thick_mode()
+        ora_cfg = OracleConfig()
+        ora_conn = oracledb.connect(
+            user=ora_cfg.user,
+            password=ora_cfg.password,
+            dsn=ora_cfg.dsn,
+        )
+
+        try:
+            extract_and_load_partes(ora_conn, pg_conn, start_date, end_date)
+            extract_and_load_valor(ora_conn, pg_conn, start_date, end_date)
+        finally:
+            ora_conn.close()
+
+        logger.info("Executando normalização de partes...")
+        normalize(pg_conn)
+        logger.info("Partes extraídas e normalizadas.")
+
+    finally:
+        pg_conn.close()
+
+
+# ── Etapa 3/4: Sync PG local → Railway ───────────────────────────────
+
+
+def _run_sync(
+    include_assuntos: bool,
+    include_partes: bool,
+    schema_only: bool = False,
+) -> None:
+    """Sincroniza PostgreSQL local → Railway (produção).
+
+    Args:
+        include_assuntos: Incluir assuntos no sync.
+        include_partes: Incluir partes no sync.
+        schema_only: Se True, só aplica migrações de schema (sem dados).
+    """
     railway_url = os.getenv("DB_PRODUCAO", "")
     if not railway_url:
         raise RuntimeError(
@@ -178,7 +261,15 @@ def _run_sync(include_assuntos: bool) -> None:
         )
 
     sync = RailwaySync(PostgresConfig(), railway_url)
-    sync.sync_all(include_assuntos=include_assuntos)
+
+    if schema_only:
+        sync.sync_schema()
+        return
+
+    sync.sync_all(
+        include_assuntos=include_assuntos,
+        include_partes=include_partes,
+    )
 
 
 # ── Pipeline principal ────────────────────────────────────────────────
@@ -196,7 +287,7 @@ def main() -> None:
     logger.info("=" * 60)
 
     try:
-        # Etapa 1: ETL Oracle → PG local
+        # Etapa 1 + 2: ETL Oracle → PG local (principais + partes)
         if not args.sync_only:
             logger.info("")
             logger.info(">>> ETAPA 1: ETL Oracle → PostgreSQL local")
@@ -205,11 +296,18 @@ def main() -> None:
         else:
             logger.info(">>> ETL Oracle pulado (--sync-only).")
 
-        # Etapa 2: Sync PG local → Railway
+        # Etapa 3 + 4: Sync PG local → Railway
         if not args.etl_only:
             logger.info("")
-            logger.info(">>> ETAPA 2: Sincronização PG local → Railway")
-            _run_sync(include_assuntos=not args.no_assuntos)
+            if args.schema_only:
+                logger.info(">>> ETAPA 3: Sincronização de schema → Railway")
+            else:
+                logger.info(">>> ETAPA 3/4: Sincronização PG local → Railway")
+            _run_sync(
+                include_assuntos=not args.no_assuntos,
+                include_partes=not args.no_partes,
+                schema_only=args.schema_only,
+            )
             logger.info(">>> Sincronização concluída.")
         else:
             logger.info(">>> Sincronização Railway pulada (--etl-only).")
