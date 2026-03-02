@@ -369,7 +369,9 @@ class OverviewRepository:
                 SELECT TO_CHAR({date_col}, 'YYYY-MM') AS periodo,
                        COUNT(*) AS total
                 FROM {table}
-                WHERE {date_col} IS NOT NULL AND {where_clause}
+                WHERE {date_col} IS NOT NULL
+                  AND {date_col} < DATE_TRUNC('month', CURRENT_DATE)
+                  AND {where_clause}
                 GROUP BY TO_CHAR({date_col}, 'YYYY-MM')
                 ORDER BY periodo
             """)

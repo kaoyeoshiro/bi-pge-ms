@@ -248,10 +248,12 @@ class BaseRepository:
         else:
             period_expr = func.to_char(date_col, "YYYY-MM")
 
+        inicio_mes_corrente = func.date_trunc("month", func.current_date())
         stmt = (
             select(period_expr.label("periodo"), func.count().label("total"))
             .select_from(self.model)
             .where(date_col.isnot(None))
+            .where(date_col < inicio_mes_corrente)
             .group_by(period_expr)
             .order_by(period_expr)
         )

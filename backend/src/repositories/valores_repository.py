@@ -226,6 +226,7 @@ class ValoresRepository(BaseRepository):
         date_col = self._get_date_column()
         period_expr = func.to_char(date_col, "YYYY-MM")
 
+        inicio_mes_corrente = func.date_trunc("month", func.current_date())
         stmt = (
             select(
                 period_expr.label("periodo"),
@@ -235,6 +236,7 @@ class ValoresRepository(BaseRepository):
             .select_from(ProcessoNovo)
             .where(date_col.isnot(None))
             .where(ProcessoNovo.valor_acao > 0)
+            .where(date_col < inicio_mes_corrente)
             .group_by(period_expr)
             .order_by(period_expr)
         )
