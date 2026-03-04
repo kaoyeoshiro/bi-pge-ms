@@ -185,8 +185,8 @@ class AssuntoResumoResponse(BaseModel):
 
     nome: str
     codigo: int
-    kpis: dict[str, KPIValue]
-    top_filhos: list[AssuntoGroupCount] = []
+    kpis: list[KPIValue]
+    top_filhos: list[GroupCount] = []
     timeline: list[TimelineSeries] = []
 
 
